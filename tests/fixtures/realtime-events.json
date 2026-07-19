@@ -1,0 +1,51 @@
+{
+  "ordered": [
+    {
+      "event_id": "evt_001",
+      "type": "input_audio_buffer.speech_started",
+      "audio_start_ms": 120,
+      "item_id": "item_A"
+    },
+    {
+      "event_id": "evt_002",
+      "type": "input_audio_buffer.speech_stopped",
+      "audio_end_ms": 940,
+      "item_id": "item_A"
+    },
+    {
+      "event_id": "evt_003",
+      "type": "conversation.item.input_audio_transcription.delta",
+      "item_id": "item_A",
+      "content_index": 0,
+      "delta": "A reviewable "
+    },
+    {
+      "event_id": "evt_004",
+      "type": "conversation.item.input_audio_transcription.completed",
+      "item_id": "item_A",
+      "content_index": 0,
+      "transcript": "A reviewable answer."
+    }
+  ],
+  "outOfOrderCompletions": [
+    {
+      "event_id": "evt_006",
+      "type": "conversation.item.input_audio_transcription.completed",
+      "item_id": "item_B",
+      "content_index": 0,
+      "transcript": "Second turn."
+    },
+    {
+      "event_id": "evt_005",
+      "type": "conversation.item.input_audio_transcription.completed",
+      "item_id": "item_A",
+      "content_index": 0,
+      "transcript": "First turn."
+    }
+  ],
+  "invalid": {
+    "event_id": "evt_invalid",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "transcript": "Missing item ID."
+  }
+}
