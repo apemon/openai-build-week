@@ -122,6 +122,9 @@ async function providerAttempt(
     );
     return validateProviderResponse(response, request);
   } catch (error) {
+    if (controller.signal.aborted) {
+      throw new BrainRunError("MODEL_TIMEOUT", "The Brain request timed out.", true, { cause: error });
+    }
     throw mapProviderError(error);
   } finally {
     clearTimeout(timeout);

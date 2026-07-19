@@ -29,20 +29,36 @@ export function isRepairableBrainError(error: unknown): error is BrainRunError {
 
 export function mapProviderError(error: unknown): BrainRunError {
   if (error instanceof BrainRunError) return error;
-  if (error instanceof DOMException && error.name === "AbortError") {
+
+  type ProviderErrorCandidate = {
+    name?: unknown;
+    status?: unknown;
+    code?: unknown;
+    cause?: unknown;
+  };
+
+  const chain: ProviderErrorCandidate[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && typeof current === "object" && current !== null; depth += 1) {
+    const candidate = current as ProviderErrorCandidate;
+    chain.push(candidate);
+    current = candidate.cause;
+  }
+
+  const timedOut = chain.some(
+    (candidate) =>
+      candidate.name === "AbortError" ||
+      candidate.name === "APIUserAbortError" ||
+      candidate.name === "APIConnectionTimeoutError" ||
+      candidate.code === "ABORT_ERR" ||
+      candidate.status === 408 ||
+      candidate.status === 504,
+  );
+  if (timedOut) {
     return new BrainRunError("MODEL_TIMEOUT", "The Brain request timed out.", true, { cause: error });
   }
 
-  const candidate = error as { name?: unknown; status?: unknown; code?: unknown } | null;
-  if (
-    candidate?.name === "AbortError" ||
-    candidate?.name === "APIUserAbortError" ||
-    candidate?.name === "APIConnectionTimeoutError" ||
-    candidate?.status === 408 ||
-    candidate?.status === 504
-  ) {
-    return new BrainRunError("MODEL_TIMEOUT", "The Brain request timed out.", true, { cause: error });
-  }
+  const candidate = chain[0] ?? null;
   if (candidate?.name === "LengthFinishReasonError" || candidate?.name === "ContentFilterFinishReasonError") {
     return new BrainRunError("INVALID_MODEL_OUTPUT", "The Brain returned an incomplete response.", true, {
       cause: error,

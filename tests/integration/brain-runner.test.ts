@@ -129,4 +129,37 @@ describe("runBrain", () => {
     });
     expect(parse).toHaveBeenCalledTimes(1);
   });
+
+  it("uses the application abort signal when the SDK rejection shape is unknown", async () => {
+    const parse = vi.fn((_body: unknown, options?: { signal?: AbortSignal }) => {
+      return new Promise((_resolve, reject) => {
+        options?.signal?.addEventListener("abort", () => {
+          reject(new Error("opaque SDK wrapper"));
+        });
+      });
+    });
+
+    await expect(runBrain(request, { responses: { parse }, timeoutMs: 1 })).rejects.toMatchObject({
+      code: "MODEL_TIMEOUT",
+      retryable: true,
+    });
+    expect(parse).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps an SDK connection wrapper with a nested abort as a timeout", async () => {
+    const nestedAbort = Object.assign(new Error("request aborted"), {
+      name: "APIUserAbortError",
+    });
+    const wrapped = Object.assign(new Error("connection failed"), {
+      name: "APIConnectionError",
+      cause: nestedAbort,
+    });
+    const parse = vi.fn().mockRejectedValue(wrapped);
+
+    await expect(runBrain(request, { responses: { parse }, timeoutMs: 10 })).rejects.toMatchObject({
+      code: "MODEL_TIMEOUT",
+      retryable: true,
+    });
+    expect(parse).toHaveBeenCalledTimes(1);
+  });
 });
