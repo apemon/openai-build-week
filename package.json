@@ -24,6 +24,7 @@
   "devDependencies": {
     "@axe-core/playwright": "latest",
     "@eslint/eslintrc": "latest",
+    "@next/env": "^16.2.10",
     "@playwright/test": "latest",
     "@testing-library/jest-dom": "latest",
     "@testing-library/react": "latest",
