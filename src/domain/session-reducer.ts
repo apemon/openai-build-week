@@ -41,6 +41,14 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
         error: null,
       };
       break;
+    case "BRAIN_RETRY_REQUESTED":
+      if (state.phase !== "recoverable_error") return state;
+      next = { ...state, phase: "analyzing", pendingRequest: { requestId: event.requestId, baseRevision: state.revision }, error: null };
+      break;
+    case "BRAIN_RESUME_REQUESTED":
+      if (state.mode !== "live" || (state.phase !== "final_review" && state.phase !== "finalized")) return state;
+      next = { ...state, phase: "analyzing", pendingRequest: { requestId: event.requestId, baseRevision: state.revision }, answerDraft: null, error: null };
+      break;
     case "BRAIN_RESPONSE_RECEIVED": {
       const { response } = event;
       if (!state.pendingRequest || response.requestId !== state.pendingRequest.requestId || response.baseRevision !== state.revision || response.revision !== state.revision + 1) return state;

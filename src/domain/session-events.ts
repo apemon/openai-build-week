@@ -10,6 +10,8 @@ export type SessionEvent =
   | { type: "ANSWER_DRAFT_EDITED"; text: string }
   | { type: "ANSWER_DRAFT_DISCARDED" }
   | { type: "BRAIN_REQUESTED"; requestId: string; turn: ConversationTurn }
+  | { type: "BRAIN_RETRY_REQUESTED"; requestId: string }
+  | { type: "BRAIN_RESUME_REQUESTED"; requestId: string }
   | { type: "BRAIN_RESPONSE_RECEIVED"; response: BrainResponse }
   | { type: "DEMO_REVISION_APPLIED"; specification: Specification; nextPrompt: InterviewPrompt | null; turn: ConversationTurn }
   | { type: "ENTER_FINAL_REVIEW" }
