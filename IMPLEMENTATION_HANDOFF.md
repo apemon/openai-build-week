@@ -476,6 +476,7 @@ Create this structure. Minor colocated test files are allowed, but preserve owne
 
 ```text
 /
+├── AGENTS.md
 ├── .env.example
 ├── .gitignore
 ├── CONTEXT.md
@@ -1241,9 +1242,24 @@ Copy everything inside the following block into the next Codex implementation se
 
 ```text
 Build Spec Grill in this repository from the agreed planning documents. Begin by
-reading IMPLEMENTATION_HANDOFF.md completely, then CONTEXT.md and every file in
-docs/adr/. Treat them as authoritative. Do not reopen settled product decisions
-or expand the MVP.
+reading AGENTS.md and following it, then read IMPLEMENTATION_HANDOFF.md completely,
+CONTEXT.md, and every file in docs/adr/. Treat them as authoritative. Do not
+reopen settled product decisions or expand the MVP.
+
+The user will run this session with Codex YOLO permissions. Use that autonomy for
+normal in-scope local work: edit files, install project dependencies, run local
+servers, use browser automation, and execute verification without repeatedly
+asking for permission. YOLO is execution permission, not authorization to expand
+scope, invent secrets or decisions, purchase services, create accounts, weaken
+security, or publish changes beyond the request.
+
+Proceed while any safe in-scope work remains. If completion genuinely requires a
+human-only action such as obtaining/configuring an OpenAI key, authenticating an
+external account, accepting terms, selecting a paid plan, configuring DNS, or
+granting a physical microphone permission, finish all mock/demo/non-live work
+first. Then stop using the exact BLOCKED ON HUMAN format in AGENTS.md. Never ask
+the user to paste a secret into chat, silently substitute prepared data into Live
+Mode, or claim the blocked verification passed.
 
 Create a small Codex agent team immediately:
 
