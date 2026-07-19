@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "generate:demo-audio": "tsx scripts/generate-demo-audio.ts"
+    "generate:demo-audio": "tsx scripts/generate-demo-audio.ts",
+    "smoke:live:brain": "tsx scripts/live-brain-smoke.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "latest",
