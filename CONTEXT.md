@@ -1,0 +1,89 @@
+# Spec Grill
+
+Spec Grill turns an imprecise product request into an implementation-ready specification through a focused AI-led interview.
+
+## Language
+
+**Product Manager**:
+The solo person using the MVP to supply known product intent, confirm requirements, and identify decisions that must be taken elsewhere.
+_Avoid_: Attendee, participant, Stakeholder
+
+**Decision Owner**:
+A person or group outside the MVP Interview Session whose authority or expertise is needed to resolve an Open Question or Blocker.
+_Avoid_: User, attendee, approver
+
+**Interview Session**:
+One ephemeral browser session in which a Product Manager answers the AI interviewer and develops a single specification. It is not a shared or persistent meeting room in the MVP.
+_Avoid_: Meeting, call, workspace
+
+**Live Mode**:
+An Interview Session driven by the Product Manager's real input and genuine AI service calls. Its outputs are identified as live AI results.
+_Avoid_: Production mode, normal mode
+
+**Demo Mode**:
+An explicit deterministic walkthrough driven by the prepared team-billing transcript and prevalidated Specification snapshots, without AI or microphone dependencies. Its outputs are always identified as demo data and never mixed into a Live Mode Specification.
+_Avoid_: Offline AI, mock AI, fallback AI
+
+**Voice Turn**:
+A Product Manager answer captured after the Interview Session begins and automatically bounded when the Product Manager finishes speaking. It does not require push-to-talk, but its transcription must be confirmed before reaching the Brain.
+_Avoid_: Recording, voice message, audio clip
+
+**Answer Draft**:
+The editable finalized transcription or typed response held by the Communicator for Product Manager review while microphone capture is paused. It is not yet a product decision and is never sent to the Brain automatically.
+_Avoid_: Decision, requirement, final answer
+
+**Confirmed Answer**:
+An Answer Draft the Product Manager has explicitly approved for submission to the Brain. Only Confirmed Answers may change the Specification.
+_Avoid_: Transcript, message, raw input
+
+**Session Data**:
+The transient audio, conversation, and Specification information used within one Interview Session. Spec Grill does not persist it to a database or retain raw audio; only confirmed revisions may be checkpointed temporarily in the browser tab for reload recovery, and Reset, finalized exit, or expiry removes app-held state.
+_Avoid_: Account data, saved project, recording archive
+
+**Interview Prompt**:
+The Communicator's single current question. It has a concise spoken form and a detailed visible form that may include context, a grounded AI recommendation, or a Visual Aid, but both forms ask for the same decision; absent sufficient confirmed evidence, it presents no recommendation.
+_Avoid_: Question list, questionnaire, agenda
+
+**Deferred Prompt**:
+An Interview Prompt the Product Manager intentionally leaves unanswered for later resolution. It becomes an Open Question or Blocker with a suggested Next Action, never a Confirmed Answer.
+_Avoid_: Skipped answer, implicit decision
+
+**Visual Aid**:
+An optional schema-driven diagram that clarifies the actors, relationships, flow, or states relevant to the current Interview Prompt. It is application-rendered and never arbitrary model-authored executable markup.
+_Avoid_: AI image, generated HTML, generated SVG
+
+**Communicator**:
+The interviewing agent that presents one Interview Prompt at a time in accessible spoken and visible forms without inventing Product Manager decisions.
+_Avoid_: Host, assistant, moderator
+
+**Brain**:
+The analysis agent that maintains the Specification, identifies its most important unresolved issue, and supplies the next Interview Prompt to the Communicator.
+_Avoid_: Interviewer, narrator
+
+**Specification**:
+The structured, evolving statement of the product problem, requirements, assumptions, risks, open questions, and acceptance criteria produced during an Interview Session.
+_Avoid_: Notes, transcript, summary
+
+**Readiness**:
+The Brain's evidence-based assessment of a Specification as `draft`, `blocked`, `ready_with_follow_ups`, or `ready`. It is categorical rather than a synthetic percentage and never prevents the Product Manager from finalizing with unresolved work visible.
+_Avoid_: Completion score, confidence score, progress percentage
+
+**Specification Item**:
+One traceable statement within a Specification, carrying source-turn references and a status of `confirmed`, `derived`, `proposed`, or `unresolved`. Only the Product Manager can authorize a product decision as `confirmed`; `derived` content must be logically entailed by confirmed decisions.
+_Avoid_: Fact, AI answer, bullet
+
+**Acceptance Criterion**:
+A uniquely identified, source-linked, test-ready condition that demonstrates a requirement is satisfied. Behavioral criteria use Given/When/Then; non-functional criteria use measurable assertions, and unresolved behavior remains visibly provisional.
+_Avoid_: Requirement, test case, success metric
+
+**Open Question**:
+An unresolved issue that should be answered but does not prevent the current Specification from being handed to implementation.
+_Avoid_: Blocker, prompt, concern
+
+**Blocker**:
+An unresolved decision, dependency, or validation need that prevents the Specification from being implementation-ready.
+_Avoid_: Open Question, risk, bug
+
+**Next Action**:
+A concrete follow-up after the Interview Session, with an intended outcome, that resolves or reduces an Open Question or Blocker. The Brain may suggest a role-based Decision Owner, but ownership remains provisional until the Product Manager confirms it.
+_Avoid_: Requirement, task, reminder
