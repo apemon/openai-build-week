@@ -42,9 +42,12 @@ Open [http://localhost:3000](http://localhost:3000). With the example configurat
 | `OPENAI_REALTIME_MODEL` | Realtime Communicator model | `gpt-realtime-2.1` |
 | `OPENAI_TRANSCRIPTION_MODEL` | Input transcription model | `gpt-4o-transcribe` |
 | `LIVE_AI_ENABLED` | Server-side Live kill switch | `false` |
+| `BRAIN_DEBUG_LOGS` | Emit content-free Brain submission metadata to server logs | `false` |
 | `ALLOWED_ORIGIN` | Exact browser origin accepted by guarded routes | `http://localhost:3000` |
 
 Keep the standard key in `.env.local` or the deployment provider's encrypted server environment. Never add `NEXT_PUBLIC_` credentials. Use a dedicated OpenAI project with conservative spend and rate limits, and enable Live only for controlled presentation windows.
+
+Set `BRAIN_DEBUG_LOGS=true` locally to trace valid Brain submissions in the server terminal. Each request logs `submitted` and then `succeeded` or `failed`, with request metadata and elapsed time only. Answer text, prompts, transcripts, Specifications, credentials, and provider payloads are never logged.
 
 ## Verification
 

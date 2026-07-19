@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { runBrain } from "@/agents/brain/run-brain";
+import { logBrainSubmission } from "@/agents/brain/debug-log";
 import { BrainRunError } from "@/agents/brain/retry-policy";
+import { runBrain } from "@/agents/brain/run-brain";
 import { brainRequestSchema } from "@/domain/schemas";
 import type { ApiError } from "@/domain/types";
 
@@ -95,8 +96,27 @@ export async function POST(request: Request): Promise<NextResponse> {
     return errorResponse("INVALID_REQUEST", "The Interview Session has expired.", false, requestId, 410);
   }
 
+  const requestedModel = process.env.OPENAI_BRAIN_MODEL ?? "gpt-5.6";
+  const startedAt = Date.now();
+  const logContext = {
+    requestId,
+    operation: parsed.data.operation,
+    baseRevision: parsed.data.baseRevision,
+    turnCount: parsed.data.turns.length,
+    requestedModel,
+  } as const;
+  logBrainSubmission({ event: "submitted", ...logContext });
+
   try {
     const response = await runBrain(parsed.data);
+    logBrainSubmission({
+      event: "succeeded",
+      ...logContext,
+      elapsedMs: Date.now() - startedAt,
+      revision: response.revision,
+      actualModel: response.provenance.actualModel,
+      repairAttempted: response.provenance.repairAttempted,
+    });
     return NextResponse.json(response, {
       status: 200,
       headers: { "Cache-Control": "no-store" },
@@ -106,6 +126,15 @@ export async function POST(request: Request): Promise<NextResponse> {
       error instanceof BrainRunError
         ? error
         : new BrainRunError("INTERNAL_ERROR", "The Brain request failed.", true, { cause: error });
-    return errorResponse(mapped.code, mapped.message, mapped.retryable, requestId, statusFor(mapped));
+    const status = statusFor(mapped);
+    logBrainSubmission({
+      event: "failed",
+      ...logContext,
+      elapsedMs: Date.now() - startedAt,
+      errorCode: mapped.code,
+      retryable: mapped.retryable,
+      status,
+    });
+    return errorResponse(mapped.code, mapped.message, mapped.retryable, requestId, status);
   }
 }
