@@ -27,6 +27,7 @@
     "@eslint/eslintrc": "latest",
     "@next/env": "^16.2.10",
     "@playwright/test": "latest",
+    "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/jest-dom": "latest",
     "@testing-library/react": "latest",
     "@testing-library/user-event": "latest",

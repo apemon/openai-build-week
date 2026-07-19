@@ -10,9 +10,9 @@ export function SpecificationSection({ id, title, items, changedItemIds = [], on
       {items.length ? <ul className="mt-3 space-y-3">{items.map((item) => <li key={item.id} className={`rounded-xl border p-3 ${changedItemIds.includes(item.id) ? "border-sky-600 bg-sky-950/25" : "border-stone-700 bg-stone-950/40"}`}>
         <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs text-stone-400">{item.id}</span><ProvenanceChip status={item.status} />{changedItemIds.includes(item.id) && <span className="text-xs font-semibold text-sky-200">Changed this revision</span>}</div>
         <p className="mt-2 leading-6 text-stone-200">{item.statement}</p>
-        <p className="mt-2 text-xs text-stone-500">Sources: {item.sourceTurnIds.join(", ") || "none"}</p>
+        <p className="mt-2 text-xs text-stone-400">Sources: {item.sourceTurnIds.join(", ") || "none"}</p>
         {onCorrect && <button type="button" onClick={() => onCorrect(item)} className="mt-2 min-h-11 rounded-lg px-3 text-sm font-semibold text-sky-200 underline decoration-sky-700 underline-offset-4">Correct or challenge</button>}
-      </li>)}</ul> : <p className="mt-2 text-sm text-stone-500">Nothing recorded yet.</p>}
+      </li>)}</ul> : <p className="mt-2 text-sm text-stone-400">Nothing recorded yet.</p>}
     </section>
   );
 }
