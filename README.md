@@ -73,13 +73,13 @@ Normal CI must not call OpenAI or depend on microphone hardware. Live smoke test
 
 Choose `Run prepared demo`, then activate `Use prepared answer` for the eight prepared turns. The scenario covers the initial team-billing request followed by permissions, billing basis, seat changes, failed payment, provider choice, measurable success, and tax. The final state is `ready_with_follow_ups` and keeps Finance registration and retention review visible as Next Actions.
 
-The demo uses the same production schemas and Specification rendering path as Live Mode, but not the Live Brain endpoint. The committed MP3s are valid silent placeholders, so the deterministic text walkthrough works before approved speech assets exist. Generate the final local prompt audio with a dedicated project key, review it, and commit it before presenting audio:
+The demo uses the same production schemas and Specification rendering path as Live Mode, but not the Live Brain endpoint. Its locally bundled prompt MP3s were generated from each fixture's exact `spokenQuestion` with `gpt-4o-mini-tts` and `marin`; container, duration, and non-silence checks pass. Regenerate them with a dedicated project key when prompts change:
 
 ```bash
 OPENAI_API_KEY=<configured-locally> npm run generate:demo-audio
 ```
 
-The script uses `gpt-4o-mini-tts` and `marin`, and speaks each fixture's exact `spokenQuestion`. Do not put the key in the command history on a shared machine; configure it in the local environment instead. If approved audio cannot play, the walkthrough continues silently.
+Do not put the key in the command history on a shared machine; configure it in `.env.local` instead. Manually listen to all eight generated files before presentation to confirm spoken-word delivery. If approved audio cannot play, the walkthrough continues silently.
 
 ## Deploy to Vercel
 

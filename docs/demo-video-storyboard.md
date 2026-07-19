@@ -65,7 +65,7 @@ Target length: 3:00. Capture at 1280×720 or larger in current desktop Chrome. U
 - [ ] Remove notifications, unrelated tabs, keys, project identifiers, request payloads, transcripts not intended for the demo, and confidential data from the recording.
 - [ ] Use large cursor/highlight settings and keep important UI text readable at final video resolution.
 - [ ] Confirm Prepared and Live provenance is visible and accurate in every shot.
-- [ ] Replace the committed silent placeholder MP3s with reviewed generated speech before demonstrating Prepared prompt audio.
+- [ ] Listen to all eight generated MP3s and confirm the spoken words match the prepared prompts before demonstrating audio.
 - [ ] Record actual Live output only after the opt-in smoke and physical microphone checklist pass.
 - [ ] Do not claim Zero Data Retention unless the active OpenAI project has been verified for it.
 - [ ] Keep final runtime under 3:00 and leave at least two seconds on the closing Final Review frame.

@@ -1,8 +1,10 @@
-# Prepared Demo audio placeholders
+# Prepared Demo prompt audio
 
-The committed MP3 files in this directory are valid, silent placeholders. They
-are not generated speech and the interface must not claim that they are. The
-Prepared Demo deliberately continues from the visible prompt if playback is
-silent or fails. Replace these files with approved, locally bundled prompt audio
-whose spoken words exactly match `teamBillingPrompts[*].spokenQuestion` before
-claiming prepared voice playback in a demo.
+The committed MP3 files were generated locally with `gpt-4o-mini-tts` and the
+`marin` voice by `npm run generate:demo-audio`. Each file uses the corresponding
+`teamBillingPrompts[*].spokenQuestion` as its input. Container, duration, and
+non-silence checks passed after generation.
+
+Listen to all eight files and confirm the spoken words match the fixture inputs
+before a recorded presentation. The Prepared Demo deliberately continues from
+the visible prompt if playback fails.
