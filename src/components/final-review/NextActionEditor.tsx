@@ -1,0 +1,9 @@
+"use client";
+
+import { useId } from "react";
+import type { NextAction } from "@/domain/types";
+
+export function NextActionEditor({ action, onChange }: { action: NextAction; onChange: (action: NextAction) => void }) {
+  const id = useId();
+  return <fieldset className="rounded-xl border border-stone-700 p-4"><legend className="px-2 font-mono text-sm text-stone-400">{action.id}</legend><div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold">Action<textarea rows={3} value={action.action} onChange={(event) => onChange({ ...action, action: event.target.value })} className="mt-1 w-full rounded-lg border border-stone-600 bg-stone-950 p-2 font-normal" /></label><label className="text-sm font-semibold">Intended outcome<textarea rows={3} value={action.intendedOutcome} onChange={(event) => onChange({ ...action, intendedOutcome: event.target.value })} className="mt-1 w-full rounded-lg border border-stone-600 bg-stone-950 p-2 font-normal" /></label><label htmlFor={`${id}-owner`} className="text-sm font-semibold">Decision Owner<input id={`${id}-owner`} value={action.decisionOwnerRole ?? ""} onChange={(event) => onChange({ ...action, decisionOwnerRole: event.target.value || null, ownership: event.target.value ? action.ownership : "owner_to_identify" })} className="mt-1 min-h-11 w-full rounded-lg border border-stone-600 bg-stone-950 px-3 font-normal" /></label><label htmlFor={`${id}-ownership`} className="text-sm font-semibold">Confirmation state<select id={`${id}-ownership`} value={action.ownership} onChange={(event) => onChange({ ...action, ownership: event.target.value as NextAction["ownership"] })} className="mt-1 min-h-11 w-full rounded-lg border border-stone-600 bg-stone-950 px-3 font-normal"><option value="provisional">Provisional</option><option value="confirmed">PM confirmed</option><option value="owner_to_identify">Owner to identify</option></select></label></div></fieldset>;
+}

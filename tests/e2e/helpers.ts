@@ -1,0 +1,122 @@
+import AxeBuilder from "@axe-core/playwright";
+import { expect, type Page, type Route } from "@playwright/test";
+import { teamBillingPrompts, teamBillingSnapshots } from "@/demo/team-billing-snapshots";
+import type { BrainRequest, InterviewPrompt, Specification } from "@/domain/types";
+
+export async function expectNoSeriousAxeViolations(page: Page): Promise<void> {
+  const results = await new AxeBuilder({ page }).analyze();
+  const serious = results.violations
+    .filter((violation) => violation.impact === "critical" || violation.impact === "serious")
+    .map((violation) => ({ id: violation.id, impact: violation.impact, targets: violation.nodes.map((node) => node.target) }));
+  expect(serious).toEqual([]);
+}
+
+export async function startLiveText(page: Page): Promise<void> {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Continue with text only" }).click();
+  await expect(page.getByRole("heading", { name: /What do you want to build/ })).toBeVisible();
+}
+
+export async function createTypedDraft(page: Page, text: string): Promise<void> {
+  await page.getByLabel("Type an answer").fill(text);
+  await page.getByRole("button", { name: "Review answer" }).click();
+  await expect(page.getByRole("heading", { name: "Review Answer Draft" })).toBeVisible();
+}
+
+export function brainResponse(
+  request: BrainRequest,
+  specification: Specification = teamBillingSnapshots[0],
+  nextPrompt: InterviewPrompt | null = teamBillingPrompts[1],
+) {
+  return {
+    schemaVersion: 1,
+    requestId: request.requestId,
+    baseRevision: request.baseRevision,
+    revision: request.baseRevision + 1,
+    provenance: {
+      source: "live_ai",
+      agent: "brain",
+      requestedModel: "gpt-5.6",
+      actualModel: "gpt-5.6",
+      validatedAt: new Date().toISOString(),
+      repairAttempted: false,
+    },
+    output: {
+      specification,
+      nextPrompt,
+      changeSummary: ["Applied a validated test revision."],
+    },
+  };
+}
+
+export async function fulfillBrain(route: Route, responder?: (request: BrainRequest) => unknown): Promise<BrainRequest> {
+  const request = route.request().postDataJSON() as BrainRequest;
+  await route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(responder ? responder(request) : brainResponse(request)),
+  });
+  return request;
+}
+
+export async function downloadText(page: Page): Promise<{ filename: string; text: string }> {
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Download Markdown" }).click(),
+  ]);
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  return { filename: download.suggestedFilename(), text: Buffer.concat(chunks).toString("utf8") };
+}
+
+export async function installFakeRealtime(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const track = {
+      enabled: false,
+      readyState: "live",
+      stop() { this.readyState = "ended"; },
+    };
+    const stream = {
+      getAudioTracks: () => [track],
+      getTracks: () => [track],
+    };
+    class FakeDataChannel extends EventTarget {
+      readyState = "open";
+      send(data: string) {
+        (window as typeof window & { __realtimeSent?: string[] }).__realtimeSent?.push(data);
+      }
+      close() { this.readyState = "closed"; }
+    }
+    class FakePeerConnection extends EventTarget {
+      connectionState = "connected";
+      localDescription: RTCSessionDescriptionInit | null = null;
+      createDataChannel() {
+        const channel = new FakeDataChannel();
+        (window as typeof window & { __realtimeChannel?: FakeDataChannel }).__realtimeChannel = channel;
+        return channel;
+      }
+      addTrack() {}
+      async createOffer() { return { type: "offer" as const, sdp: "fake-local-sdp" }; }
+      async setLocalDescription(description: RTCSessionDescriptionInit) { this.localDescription = description; }
+      async setRemoteDescription() {}
+      close() { this.connectionState = "closed"; }
+    }
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: async () => stream },
+    });
+    Object.defineProperty(window, "RTCPeerConnection", { configurable: true, value: FakePeerConnection });
+    Object.defineProperty(HTMLMediaElement.prototype, "play", { configurable: true, value: async () => undefined });
+    Object.defineProperty(HTMLMediaElement.prototype, "pause", { configurable: true, value: () => undefined });
+    (window as typeof window & { __realtimeSent?: string[] }).__realtimeSent = [];
+  });
+}
+
+export async function emitRealtime(page: Page, event: object): Promise<void> {
+  await page.evaluate((providerEvent) => {
+    const channel = (window as typeof window & { __realtimeChannel?: EventTarget }).__realtimeChannel;
+    if (!channel) throw new Error("Fake Realtime data channel is not connected");
+    channel.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(providerEvent) }));
+  }, event);
+}
