@@ -1,0 +1,44 @@
+{
+  "specification": {
+    "title": "Team billing",
+    "problemStatement": [
+      {
+        "id": "PROB-001",
+        "kind": "problem",
+        "statement": "Teams need one billing workflow for their workspace.",
+        "status": "confirmed",
+        "sourceTurnIds": ["TURN-001"],
+        "rationale": "The Product Manager explicitly requested team billing."
+      }
+    ],
+    "users": [],
+    "jobsToBeDone": [],
+    "functionalRequirements": [],
+    "nonFunctionalRequirements": [],
+    "assumptions": [],
+    "risks": [],
+    "edgeCases": [],
+    "openQuestions": [],
+    "blockers": [],
+    "acceptanceCriteria": [],
+    "nextActions": [],
+    "readiness": {
+      "status": "draft",
+      "evidence": ["The problem is known but key behavior is undecided."],
+      "blockerIds": [],
+      "openQuestionIds": []
+    }
+  },
+  "nextPrompt": {
+    "id": "PROMPT-001",
+    "decisionKey": "billing_roles",
+    "detailedQuestion": "Which workspace roles can manage billing?",
+    "spokenQuestion": "Which roles can manage billing?",
+    "whyItMatters": "Billing permissions define the authorization boundary.",
+    "confirmedContext": ["The product needs team billing."],
+    "decisionImpact": ["Determines billing access controls."],
+    "recommendation": null,
+    "visualAid": null
+  },
+  "changeSummary": ["Captured the team-billing problem."]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "resp_refusal",
+  "model": "gpt-5.6",
+  "status": "completed",
+  "output": [
+    {
+      "type": "message",
+      "content": [
+        {
+          "type": "refusal",
+          "refusal": "Unable to provide that response."
+        }
+      ]
+    }
+  ],
+  "output_parsed": null
+}

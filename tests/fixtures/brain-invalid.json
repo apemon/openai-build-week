@@ -1,0 +1,44 @@
+{
+  "specification": {
+    "title": "Invalid output",
+    "problemStatement": [
+      {
+        "id": "FR-001",
+        "kind": "problem",
+        "statement": "This ID has the wrong category.",
+        "status": "confirmed",
+        "sourceTurnIds": ["TURN-MISSING"],
+        "rationale": "Invalid fixture."
+      }
+    ],
+    "users": [],
+    "jobsToBeDone": [],
+    "functionalRequirements": [],
+    "nonFunctionalRequirements": [],
+    "assumptions": [],
+    "risks": [],
+    "edgeCases": [],
+    "openQuestions": [],
+    "blockers": [],
+    "acceptanceCriteria": [],
+    "nextActions": [],
+    "readiness": {
+      "status": "ready",
+      "evidence": [],
+      "blockerIds": [],
+      "openQuestionIds": []
+    }
+  },
+  "nextPrompt": {
+    "id": "PROMPT-INVALID",
+    "decisionKey": "two_questions",
+    "detailedQuestion": "Who can pay? Who can cancel?",
+    "spokenQuestion": "Who pays? Who cancels?",
+    "whyItMatters": "This deliberately asks two decisions.",
+    "confirmedContext": [],
+    "decisionImpact": [],
+    "recommendation": null,
+    "visualAid": null
+  },
+  "changeSummary": ["Invalid fixture for rejection tests."]
+}
