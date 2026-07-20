@@ -2,11 +2,13 @@
 
 ## Mission and authority
 
-Build and verify the Spec Grill MVP described by the repository's planning documents. Read these before changing code, in this order:
+Build and verify the delivered Spec Grill V1 plus the approved V2 extension described by the repository's planning documents. Read these before changing code, in this order:
 
 1. `IMPLEMENTATION_HANDOFF.md`
-2. `CONTEXT.md`
-3. Every file in `docs/adr/`
+2. `V2_IMPLEMENTATION_HANDOFF.md`
+3. `CONTEXT.md`
+4. Every file in `docs/adr/`
+5. `README.md` and `CHANGELOG.md`
 
 Those documents contain settled product decisions. Do not reopen them, weaken them to fit an SDK, or expand the MVP without an explicit user request.
 
@@ -65,6 +67,8 @@ Use task-appropriate available models. Prefer stronger reasoning for architectur
 
 Freeze shared schemas, reducer events, API contracts, and transport interfaces before parallel edits. Do not let agents edit the same shared file concurrently. Module owners fix findings in their owned files; the root agent owns cross-module integration.
 
+For V2, use the dependency-ordered sequence and ownership additions in `V2_IMPLEMENTATION_HANDOFF.md`. Preserve the existing V1 file ownership map unless the root agent explicitly freezes a non-overlapping V2 extension.
+
 ## Hard implementation constraints
 
 - Runtime Brain: server-side `gpt-5.6`, medium reasoning, Responses API Structured Outputs, full confirmed state, and `store: false`.
@@ -76,6 +80,11 @@ Freeze shared schemas, reducer events, API contracts, and transport interfaces b
 - Standard OpenAI credentials remain server-side.
 - Live AI and Prepared Demo data never mix.
 - Preserve the last valid Specification on every failure.
+- The Brain alone owns the validated Question Roadmap, dependency planning, lookahead approval, and stale reason.
+- The Communicator may conduct a clarification exchange only for one Brain-approved Lookahead Question and may produce only a non-authoritative Decision Summary.
+- A PM-confirmed Decision Summary may reach the Brain only after dependency revalidation.
+- Uploaded context must pass the preparation and Project Context Digest confirmation gate before it can affect the Specification or roadmap.
+- Do not create durable provider file objects or persist original uploads/full extractions.
 - Do not add auth, meeting integrations, collaboration, databases, payments, analytics, arbitrary model-authored markup, or multilingual scope.
 
 ## Secrets and external services
@@ -88,7 +97,7 @@ Freeze shared schemas, reducer events, API contracts, and transport interfaces b
 
 ## Verification and definition of done
 
-Implement by the dependency-ordered milestones in `IMPLEMENTATION_HANDOFF.md`. Keep the repository runnable after each milestone.
+Implement V1 foundations and V2 extensions by the dependency-ordered milestones in `IMPLEMENTATION_HANDOFF.md` and `V2_IMPLEMENTATION_HANDOFF.md`. Keep the repository runnable after each milestone.
 
 Before declaring completion, run the actual repository equivalents of:
 

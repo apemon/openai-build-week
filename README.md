@@ -2,6 +2,8 @@
 
 Spec Grill is a solo Product Manager requirements interview room. It turns a vague spoken or typed request into a traceable Specification by asking one consequential decision question at a time.
 
+V1 is implemented. The approved but not-yet-implemented V2 requirement adds reviewed project-document context and a latency-resilient, Brain-approved lookahead flow. See [V2_IMPLEMENTATION_HANDOFF.md](./V2_IMPLEMENTATION_HANDOFF.md) for the settled scope and acceptance criteria.
+
 The MVP has two deliberately separate modes:
 
 - **Live Mode** sends only Product Manager-confirmed text to an authoritative server-side Brain. Voice is optional and every transcription remains an editable Answer Draft until confirmation.
@@ -132,4 +134,4 @@ The contribution record describes repository work, not runtime model output. Pre
 
 There is no authentication, collaboration, database persistence, meeting integration, payment processing, analytics, arbitrary model-authored markup, multilingual mode, or cross-device history. Voice support targets current desktop Chrome; other browsers and mobile fall back to the first-class text path.
 
-See [IMPLEMENTATION_HANDOFF.md](./IMPLEMENTATION_HANDOFF.md), [CONTEXT.md](./CONTEXT.md), and [docs/adr](./docs/adr) for the settled product language and architecture decisions.
+See [IMPLEMENTATION_HANDOFF.md](./IMPLEMENTATION_HANDOFF.md), [V2_IMPLEMENTATION_HANDOFF.md](./V2_IMPLEMENTATION_HANDOFF.md), [CONTEXT.md](./CONTEXT.md), and [docs/adr](./docs/adr) for the settled product language and architecture decisions.

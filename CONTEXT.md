@@ -44,6 +44,30 @@ _Avoid_: Account data, saved project, recording archive
 The Communicator's single current question. It has a concise spoken form and a detailed visible form that may include context, a grounded AI recommendation, or a Visual Aid, but both forms ask for the same decision; absent sufficient confirmed evidence, it presents no recommendation.
 _Avoid_: Question list, questionnaire, agenda
 
+**Project Context Digest**:
+The editable, source-linked distillation of pasted or uploaded project context that becomes Confirmed Input only after Product Manager approval. It preserves explicit source statements without automatically confirming interpretations or the entire source document as requirements.
+_Avoid_: File summary, imported specification, confirmed document
+
+**Question Roadmap**:
+The Brain's internal, prioritized model of unresolved decisions and their dependencies. It supports future-question planning and safe lookahead selection but is not a questionnaire shown to the Product Manager.
+_Avoid_: Question list, interview script, agenda
+
+**Lookahead Question**:
+Exactly one Brain-approved Interview Prompt that the Communicator may present while the Brain processes prior confirmed input because its decision is currently independent of that work. Its approval is revision- and dependency-bound and may become stale.
+_Avoid_: Parallel question, speculative question, next question
+
+**Clarification Exchange**:
+A natural voice or text exchange in which the Communicator resolves ambiguity within one active Brain-approved decision without changing topics or making product decisions.
+_Avoid_: Brain turn, side conversation, follow-up interview
+
+**Decision Summary**:
+The concise, editable statement produced after a Clarification Exchange. It is non-authoritative until the Product Manager explicitly confirms it and it passes lookahead revalidation before Brain submission.
+_Avoid_: Transcript, Answer Draft, Communicator decision
+
+**Stale Lookahead**:
+A Lookahead Question or queued Decision Summary whose approval no longer matches the latest validated Question Roadmap or dependency state. It is retained as not applied and cannot reach the Brain or change the Specification.
+_Avoid_: Failed answer, rejected decision, deferred prompt
+
 **Deferred Prompt**:
 An Interview Prompt the Product Manager intentionally leaves unanswered for later resolution. It becomes an Open Question or Blocker with a suggested Next Action, never a Confirmed Answer.
 _Avoid_: Skipped answer, implicit decision

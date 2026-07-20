@@ -1,5 +1,18 @@
 # Changelog
 
+## V2 approved requirement — not yet implemented
+
+- Add a reviewed Project Context Digest from a large Markdown/plain-text editor or one `.md`, `.txt`, `.pdf`, or `.docx` file before the interview starts.
+- Treat only PM-confirmed digest statements as Confirmed Input, with source provenance and explicit extraction coverage warnings.
+- Have the Brain maintain an internal prioritized Question Roadmap with dependencies and approve no more than one independent Lookahead Question during an in-flight Brain revision.
+- Allow the Communicator to clarify that one decision naturally and produce an editable, non-authoritative Decision Summary.
+- Queue a PM-confirmed Decision Summary until the authoritative Brain revision applies and dependency revalidation succeeds; quarantine stale work as `not applied`.
+- Show truthful topical and processing-stage progress when no safe lookahead exists.
+- Keep original uploads, full extractions, durable provider file objects, multiple-file workflows, databases, and persistent document search out of scope.
+- Extend Prepared Demo to prove context preparation, lookahead, summary confirmation, progress, and staleness without OpenAI, microphone, or user-file dependencies.
+
+The complete approved handoff and acceptance criteria are in `V2_IMPLEMENTATION_HANDOFF.md`.
+
 ## V1 delivered features and workflow
 
 ### Features
