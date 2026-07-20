@@ -16,13 +16,6 @@
 
 The complete approved handoff and acceptance criteria are in `V2_IMPLEMENTATION_HANDOFF.md`.
 
-## Codex session references
-
-- Grilling session V1 — 019f7a40-601f-7c33-925c-c6fd605d3e50
-- Implementation V1 — 019f7b62-bd98-7293-aa20-a348a8e4fbfd
-- Grilling session V2 — 019f7f47-6e90-7563-a71d-5ba16b1b550c
-- Implementation V2 — 019f7f6d-378f-7ff2-8dda-6825ca94114e
-
 ## V2 feedback and future exploration
 
 - Observed Brain latency still leaves users waiting, and the current progress feedback needs a visible loader or clearer active status so users can distinguish running work from a hung or failed request.
@@ -60,3 +53,10 @@ The complete approved handoff and acceptance criteria are in `V2_IMPLEMENTATION_
 - Brain analysis has noticeable latency, leaving users waiting too long without meaningful progress feedback.
 - Some buttons do not provide immediate visual or state feedback after being pressed, which can cause users to click them more than once.
 - The initial-input flow should support richer ways to provide context, such as pasting Markdown or uploading a source document.
+
+## Codex session references
+
+- Grilling session V1 — 019f7a40-601f-7c33-925c-c6fd605d3e50
+- Implementation V1 — 019f7b62-bd98-7293-aa20-a348a8e4fbfd
+- Grilling session V2 — 019f7f47-6e90-7563-a71d-5ba16b1b550c
+- Implementation V2 — 019f7f6d-378f-7ff2-8dda-6825ca94114e
