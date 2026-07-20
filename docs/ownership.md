@@ -1,9 +1,9 @@
 # Implementation ownership
 
-Shared V1/V2 contracts in `src/domain/**` and `src/realtime/CommunicatorTransport.ts` are frozen and owned by the root integrator. They include Project Context Digest provenance, Question Roadmap dependencies, one Lookahead approval, Decision Summary queue/staleness, preparation phases, reducer events, API request ordering, and processing stages. Contract changes require root coordination.
+Shared V1/V2 contracts in `src/domain/**` and `src/realtime/CommunicatorTransport.ts` are frozen and owned by the root integrator. V3 implementation begins with a coordinated extension freeze for Interview Windows, Question Permits, Interview Jobs, Decision Batches, Brain Lifecycle Events, Persistent Brain Status, External Evidence, exchange/permit/cancellation identities, and checkpoint migration. Contract changes require root coordination.
 
-- `brain-api`: `src/agents/brain/**`, `src/app/api/brain/**`, Brain-specific tests and fixtures. It consumes but does not edit the frozen shared contracts.
-- `realtime-voice`: `src/realtime/**` except `CommunicatorTransport.ts`, `src/agents/communicator/**`, `src/app/api/realtime/**`, Realtime-specific tests and fixtures. It consumes but does not edit the frozen shared contracts.
-- `experience-demo`: `src/components/**`, `src/demo/**`, `src/export/**`, `src/context/**`, `src/app/api/context/**`, `public/demo-audio/**`, colocated UI/context tests. It consumes but does not edit the frozen shared contracts.
-- `verification-docs`: `tests/**` excluding module-owned fixtures, `README.md`, `.env.example`, test configs, `docs/demo-video-storyboard.md`.
-- Root integrator: root configs, `src/app/layout.tsx`, `src/app/page.tsx`, shared contracts, integration wiring.
+- `brain-api`: `src/agents/brain/**`, `src/app/api/brain/**`, Brain-specific tests and fixtures, streamed lifecycle emission, Interview Window/Decision Batch validation, experimental adapters, search evidence validation, and harness evaluation runners. It consumes but does not edit the frozen shared contracts.
+- `realtime-voice`: `src/realtime/**` except `CommunicatorTransport.ts`, `src/agents/communicator/**`, `src/app/api/realtime/**`, Realtime-specific tests and fixtures, event identity/deduplication, and mid-turn revalidation behavior. It consumes but does not edit the frozen shared contracts.
+- `experience-demo`: `src/components/**`, `src/demo/**`, `src/export/**`, `src/context/**`, `src/app/api/context/**`, `public/demo-audio/**`, Persistent Brain Status presentation, Decision Tray, External Evidence rendering, V3 Prepared fixtures, and colocated UI/context tests. It consumes but does not edit the frozen shared contracts.
+- `verification-docs`: `tests/**` excluding module-owned fixtures, `README.md`, `.env.example`, `CHANGELOG.md`, test configs, `docs/demo-video-storyboard.md`, independent lifecycle/privacy/race/accessibility verification, and evaluation documentation.
+- Root integrator: root configs, `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/SpecGrillApp.tsx`, `src/app/brain-client.ts`, shared contracts, checkpoint migration, and integration wiring.

@@ -1,5 +1,16 @@
 # Changelog
 
+## V3 approved plan — not yet implemented
+
+- Approved Bounded Async Interview Windows containing zero to three pairwise-independent Brain-issued Question Permits while preserving exactly one active visible/spoken question and one authoritative Brain request.
+- Approved revision-first revalidation, automatic atomic Decision Batches, adaptive window shrinking/re-expansion, truthful Not Applied outcomes, correction priority, pause/deferral/undo behavior, and mid-turn speech/edit preservation.
+- Approved Persistent Brain Status with content-free streamed lifecycle events, immediate activity feedback, a 30-second taking-longer threshold, a 10-second unverifiable-activity threshold, explicit retry after stream interruption, reduced-motion behavior, and non-chatty announcements.
+- Approved a bounded checkpoint expansion for at most three individually confirmed queued entries; reload always requires fresh dependency revalidation and never auto-submits.
+- Approved disabled-by-default `one_shot`, `responses_native`, and local `codex_ephemeral` Brain harness modes plus a separately controlled public-search experiment, visible External Evidence, and reproducible frozen evaluation gates.
+- Approved a deterministic V3 Prepared Demo with a user-paced fixture clock, two permits, one valid asynchronous result, one dependency-invalidated Not Applied result, atomic batch application, and no OpenAI/Codex/search/microphone/network dependency.
+
+The complete settled requirements and implementation sequence are in `V3_IMPLEMENTATION_HANDOFF.md`. None of the V3 behavior above is claimed as delivered yet.
+
 ## V2 delivered extension
 
 - Added reviewed Project Context Digest intake from Markdown/plain text or one `.md`, `.txt`, `.pdf`, or `.docx` file, with the approved size/page/character limits and actionable invalid, empty, encrypted, corrupt, and over-limit failures.

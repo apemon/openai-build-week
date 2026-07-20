@@ -2,7 +2,9 @@
 
 Spec Grill is a solo Product Manager requirements interview room. It turns a vague spoken or typed request into a traceable Specification by asking one consequential decision question at a time.
 
-V1 and the approved V2 extension are implemented. V2 adds reviewed project context and a latency-resilient, Brain-approved lookahead flow without weakening confirmation, provenance, or Live/Prepared separation. See [V2_IMPLEMENTATION_HANDOFF.md](./V2_IMPLEMENTATION_HANDOFF.md) for the settled scope and acceptance criteria.
+V1 and V2 are implemented. V2 adds reviewed project context and a latency-resilient, Brain-approved lookahead flow without weakening confirmation, provenance, or Live/Prepared separation. See [V2_IMPLEMENTATION_HANDOFF.md](./V2_IMPLEMENTATION_HANDOFF.md) for the delivered scope and acceptance criteria.
+
+V3 is approved but not yet implemented. It adds bounded Interview Windows of up to three pairwise-independent Question Permits, a persistent truthful Brain activity strip, atomic revalidated Decision Batches, and disabled-by-default local Brain-harness experiments. See [V3_IMPLEMENTATION_HANDOFF.md](./V3_IMPLEMENTATION_HANDOFF.md) for the authoritative implementation plan; current runtime behavior remains V2 until that work is delivered.
 
 The MVP has two deliberately separate modes:
 
@@ -149,4 +151,4 @@ The contribution record describes repository work, not runtime model output. Pre
 
 There is no authentication, collaboration, database persistence, meeting integration, payment processing, analytics, arbitrary model-authored markup, multilingual mode, or cross-device history. Voice support targets current desktop Chrome; other browsers and mobile fall back to the first-class text path.
 
-See [IMPLEMENTATION_HANDOFF.md](./IMPLEMENTATION_HANDOFF.md), [V2_IMPLEMENTATION_HANDOFF.md](./V2_IMPLEMENTATION_HANDOFF.md), [CONTEXT.md](./CONTEXT.md), and [docs/adr](./docs/adr) for the settled product language and architecture decisions.
+See [IMPLEMENTATION_HANDOFF.md](./IMPLEMENTATION_HANDOFF.md), [V2_IMPLEMENTATION_HANDOFF.md](./V2_IMPLEMENTATION_HANDOFF.md), [V3_IMPLEMENTATION_HANDOFF.md](./V3_IMPLEMENTATION_HANDOFF.md), [CONTEXT.md](./CONTEXT.md), [docs/ownership.md](./docs/ownership.md), and [docs/adr](./docs/adr) for the delivered and approved product language, implementation ownership, and architecture decisions.

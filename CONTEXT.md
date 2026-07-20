@@ -20,7 +20,7 @@ _Avoid_: Meeting, call, workspace
 An Interview Session driven by the Product Manager's real input and genuine AI service calls. Its outputs are identified as live AI results.
 _Avoid_: Production mode, normal mode
 
-**Demo Mode**:
+**Prepared Demo**:
 An explicit deterministic walkthrough driven by the prepared team-billing transcript and prevalidated Specification snapshots, without AI or microphone dependencies. Its outputs are always identified as demo data and never mixed into a Live Mode Specification.
 _Avoid_: Offline AI, mock AI, fallback AI
 
@@ -33,11 +33,19 @@ The editable finalized transcription or typed response held by the Communicator 
 _Avoid_: Decision, requirement, final answer
 
 **Confirmed Answer**:
-An Answer Draft the Product Manager has explicitly approved for submission to the Brain. Only Confirmed Answers may change the Specification.
+An Answer Draft the Product Manager has explicitly approved for submission to the Brain. It is one kind of Confirmed Input; only a validated Brain revision may change the Specification.
 _Avoid_: Transcript, message, raw input
 
+**Confirmed Input**:
+Product Manager-approved context, answers, corrections, Decision Summaries, or deferrals that have passed every required confirmation and dependency-revalidation gate. Only Confirmed Input may be submitted to the Brain as authoritative product intent, and only a validated complete Brain revision may change the Specification.
+_Avoid_: Transcript, draft, extracted text, search result
+
+**Correction**:
+A Product Manager-confirmed challenge to an existing Specification statement that the Brain processes as the next authoritative operation after any in-flight request terminates. It pauses asynchronous question promotion and is not a direct edit to the Specification.
+_Avoid_: Inline edit, patch, Communicator correction
+
 **Session Data**:
-The transient audio, conversation, and Specification information used within one Interview Session. Spec Grill does not persist it to a database or retain raw audio; only confirmed revisions may be checkpointed temporarily in the browser tab for reload recovery, and Reset, finalized exit, or expiry removes app-held state.
+The transient audio, conversation, context, Decision Tray, and Specification information used within one Interview Session. Spec Grill does not persist it to a database or retain raw audio; only confirmed revisions, the bounded confirmed Project Context Digest, and at most three confirmed queued asynchronous decisions may be checkpointed temporarily in the browser tab, and Reset, finalized exit, or expiry removes app-held state.
 _Avoid_: Account data, saved project, recording archive
 
 **Interview Prompt**:
@@ -52,8 +60,24 @@ _Avoid_: File summary, imported specification, confirmed document
 The Brain's internal, prioritized model of unresolved decisions and their dependencies. It supports future-question planning and safe lookahead selection but is not a questionnaire shown to the Product Manager.
 _Avoid_: Question list, interview script, agenda
 
+**Interview Window**:
+A bounded set of zero to three pairwise-independent Question Permits issued by the Brain for use while authoritative Brain work continues. It preserves one visible active question and does not expose a questionnaire to the Product Manager.
+_Avoid_: Question list, parallel interview, backlog
+
+**Question Permit**:
+The Brain's revision-bound and dependency-bound authorization to ask one Question Roadmap decision during an Interview Window. A permit does not authorize the Communicator to invent, replace, reorder, or broaden the decision.
+_Avoid_: Communicator question, suggestion, autonomous follow-up
+
+**Interview Job**:
+The lifecycle record for one Question Permit as it moves through presentation, clarification, confirmation, dependency revalidation, application, or a terminal Not Applied outcome. Only a job that reached presentation is PM-engaged.
+_Avoid_: Question, Brain request, conversation
+
+**Revalidation Pending**:
+A non-authoritative asynchronous decision or captured response preserved while its Question Permit is checked against the latest Question Roadmap and dependency state. It cannot be confirmed, submitted, or applied until revalidation succeeds.
+_Avoid_: Queued decision, confirmed answer, processing result
+
 **Lookahead Question**:
-Exactly one Brain-approved Interview Prompt that the Communicator may present while the Brain processes prior confirmed input because its decision is currently independent of that work. Its approval is revision- and dependency-bound and may become stale.
+One Brain-approved Interview Prompt that the Communicator may present from a Question Permit while the Brain processes prior confirmed input because its decision is independent of that work. Its approval is revision- and dependency-bound and may become stale.
 _Avoid_: Parallel question, speculative question, next question
 
 **Clarification Exchange**:
@@ -61,15 +85,27 @@ A natural voice or text exchange in which the Communicator resolves ambiguity wi
 _Avoid_: Brain turn, side conversation, follow-up interview
 
 **Decision Summary**:
-The concise, editable statement produced after a Clarification Exchange. It is non-authoritative until the Product Manager explicitly confirms it and it passes lookahead revalidation before Brain submission.
+The concise, editable statement produced after a Clarification Exchange. It is non-authoritative until the Product Manager explicitly confirms it and it passes fresh Question Permit, revision, and dependency revalidation before Brain submission.
 _Avoid_: Transcript, Answer Draft, Communicator decision
 
+**Decision Batch**:
+An ordered set of one to three individually confirmed and freshly revalidated asynchronous decisions submitted together for one authoritative Brain revision. The batch applies atomically and preserves each decision as a separate provenance source, including when decisions contradict.
+_Avoid_: Bulk confirmation, merged answer, concurrent revision
+
+**Decision Tray**:
+The visible session-local view of asynchronous Interview Jobs as Draft, awaiting dependency check, ready to apply, applying, applied, or Not Applied. Applied and Not Applied outcomes remain through Final Review within the active Interview Session, but the tray is not part of the authoritative Specification or its Markdown export.
+_Avoid_: Specification section, questionnaire, persistent work queue
+
 **Stale Lookahead**:
-A Lookahead Question or queued Decision Summary whose approval no longer matches the latest validated Question Roadmap or dependency state. It is retained as not applied and cannot reach the Brain or change the Specification.
+A Lookahead Question or queued Decision Summary whose approval no longer matches the latest validated Question Roadmap or dependency state. It receives a dependency-invalidated Not Applied outcome and cannot change the Specification.
 _Avoid_: Failed answer, rejected decision, deferred prompt
 
+**Not Applied**:
+A terminal Interview Job outcome stating that its wording did not change the Specification because dependencies invalidated it, its batch failed, the application stopped waiting and attempted cancellation, the PM abandoned it, or newer work superseded it. Its required reason distinguishes work the Brain never received from work it may have processed without producing an applied revision; it never claims provider execution stopped.
+_Avoid_: Rejected decision, failed answer, stale
+
 **Deferred Prompt**:
-An Interview Prompt the Product Manager intentionally leaves unanswered for later resolution. It becomes an Open Question or Blocker with a suggested Next Action, never a Confirmed Answer.
+A Product Manager-confirmed decision to leave an Interview Prompt or permitted asynchronous decision unanswered for later resolution, optionally with a note. When created during an Interview Window it is freshly dependency-revalidated and may join a Decision Batch, but only the Brain may turn it into an Open Question, Blocker, or Next Action; it never becomes a Confirmed Answer.
 _Avoid_: Skipped answer, implicit decision
 
 **Visual Aid**:
@@ -91,6 +127,18 @@ _Avoid_: Notes, transcript, summary
 **Readiness**:
 The Brain's evidence-based assessment of a Specification as `draft`, `blocked`, `ready_with_follow_ups`, or `ready`. It is categorical rather than a synthetic percentage and never prevents the Product Manager from finalizing with unresolved work visible.
 _Avoid_: Completion score, confidence score, progress percentage
+
+**Persistent Brain Status**:
+The continuously visible, truthful state of authoritative Brain work, including its elapsed time and the age of its last verified lifecycle activity. It distinguishes active, delayed, interrupted, failed, applied, and stopped work without invented percentages, stages, or completion estimates.
+_Avoid_: Spinner, loader, progress percentage, estimated completion
+
+**Brain Lifecycle Event**:
+A content-free, request-bound observation that advances Persistent Brain Status without carrying Product Manager input, model output, provider identifiers, or Specification content. It is operational evidence rather than a product decision or partial Brain result.
+_Avoid_: Progress estimate, partial answer, model reasoning
+
+**External Evidence**:
+A source-titled, URL-linked, retrieval-dated public reference found through controlled search and shown wherever it informs a recommendation or proposed Specification content. It is supporting context, never Confirmed Input, and cannot independently make an item `confirmed` or `derived`.
+_Avoid_: Confirmed fact, imported requirement, hidden research
 
 **Specification Item**:
 One traceable statement within a Specification, carrying source-turn references and a status of `confirmed`, `derived`, `proposed`, or `unresolved`. Only the Product Manager can authorize a product decision as `confirmed`; `derived` content must be logically entailed by confirmed decisions.

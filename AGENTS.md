@@ -2,13 +2,14 @@
 
 ## Mission and authority
 
-Build and verify the delivered Spec Grill V1 plus the approved V2 extension described by the repository's planning documents. Read these before changing code, in this order:
+Build and verify the delivered Spec Grill V1 and V2 plus the approved V3 extension described by the repository's planning documents. Read these before changing code, in this order:
 
 1. `IMPLEMENTATION_HANDOFF.md`
 2. `V2_IMPLEMENTATION_HANDOFF.md`
-3. `CONTEXT.md`
-4. Every file in `docs/adr/`
-5. `README.md` and `CHANGELOG.md`
+3. `V3_IMPLEMENTATION_HANDOFF.md`
+4. `CONTEXT.md`
+5. Every file in `docs/adr/`
+6. `README.md`, `CHANGELOG.md`, and `docs/ownership.md`
 
 Those documents contain settled product decisions. Do not reopen them, weaken them to fit an SDK, or expand the MVP without an explicit user request.
 
@@ -67,7 +68,7 @@ Use task-appropriate available models. Prefer stronger reasoning for architectur
 
 Freeze shared schemas, reducer events, API contracts, and transport interfaces before parallel edits. Do not let agents edit the same shared file concurrently. Module owners fix findings in their owned files; the root agent owns cross-module integration.
 
-For V2, use the dependency-ordered sequence and ownership additions in `V2_IMPLEMENTATION_HANDOFF.md`. Preserve the existing V1 file ownership map unless the root agent explicitly freezes a non-overlapping V2 extension.
+For V2 and V3, use the dependency-ordered sequences and ownership additions in their handoffs. Preserve the existing ownership map unless the root agent first freezes a non-overlapping extension.
 
 ## Hard implementation constraints
 
@@ -75,14 +76,18 @@ For V2, use the dependency-ordered sequence and ownership additions in `V2_IMPLE
 - Runtime Communicator: `gpt-realtime-2.1` over native browser WebRTC.
 - Realtime semantic VAD uses `create_response: false` and cannot call the Brain autonomously.
 - `gpt-4o-transcribe` creates the editable Answer Draft.
-- Only explicit PM confirmation calls `/api/brain`.
+- Only explicit PM confirmation may authorize input to `/api/brain`. V3 may automatically call the route only for an exact locked Decision Batch whose entries were individually PM-confirmed and freshly Brain-revalidated; this is submission of prior authorization, not autonomous confirmation.
 - Validate every AI/API response before rendering or state mutation.
 - Standard OpenAI credentials remain server-side.
 - Live AI and Prepared Demo data never mix.
 - Preserve the last valid Specification on every failure.
-- The Brain alone owns the validated Question Roadmap, dependency planning, lookahead approval, and stale reason.
-- The Communicator may conduct a clarification exchange only for one Brain-approved Lookahead Question and may produce only a non-authoritative Decision Summary.
-- A PM-confirmed Decision Summary may reach the Brain only after dependency revalidation.
+- The Brain alone owns the validated Question Roadmap, dependency planning, Interview Windows, Question Permits, and stale reasons.
+- A V3 Interview Window contains zero to three pairwise-independent Question Permits, but the Communicator may present and clarify only one active question at a time.
+- The Communicator may conduct a clarification exchange only for the active Brain-approved Question Permit and may produce only a non-authoritative Decision Summary.
+- A PM-confirmed Decision Summary or permitted deferral may reach the Brain only after dependency revalidation and as part of an atomic Decision Batch.
+- Only one authoritative Brain request may be active; validated complete revisions apply before asynchronous work is revalidated or submitted.
+- Persistent Brain Status must be driven by validated content-free lifecycle events, never invented percentages, stages, or estimates.
+- Experimental Brain harness and public-search modes remain server-side and disabled by default. `codex_ephemeral` is local evaluation-runner-only until a later promotion ADR verifies every fixed runtime/privacy boundary; experimental provenance remains visibly separate from both ordinary Live Mode and Prepared Demo.
 - Uploaded context must pass the preparation and Project Context Digest confirmation gate before it can affect the Specification or roadmap.
 - Do not create durable provider file objects or persist original uploads/full extractions.
 - Do not add auth, meeting integrations, collaboration, databases, payments, analytics, arbitrary model-authored markup, or multilingual scope.
@@ -97,7 +102,7 @@ For V2, use the dependency-ordered sequence and ownership additions in `V2_IMPLE
 
 ## Verification and definition of done
 
-Implement V1 foundations and V2 extensions by the dependency-ordered milestones in `IMPLEMENTATION_HANDOFF.md` and `V2_IMPLEMENTATION_HANDOFF.md`. Keep the repository runnable after each milestone.
+Implement V1 foundations and V2/V3 extensions by the dependency-ordered milestones in all three handoffs. Keep the repository runnable after each milestone.
 
 Before declaring completion, run the actual repository equivalents of:
 
