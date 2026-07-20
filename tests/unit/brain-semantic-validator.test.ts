@@ -80,6 +80,7 @@ describe("Brain semantic validation", () => {
       status: "derived",
       sourceTurnIds: ["TURN-001"],
       rationale: "Claimed as derived.",
+      externalEvidenceIds: [],
     });
 
     expect(validateBrainOutput(request, output).errors.join("\n")).toMatch(/unsupported constraint/);

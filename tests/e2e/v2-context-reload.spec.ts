@@ -1,13 +1,13 @@
 import { expect, test } from "@playwright/test";
 
 import { teamBillingPrompts, teamBillingSnapshots } from "@/demo/team-billing-snapshots";
-import type { BrainRequest } from "@/domain/types";
-import { brainResponse, expectNoSeriousAxeViolations } from "./helpers";
+import type { V3BrainRequest } from "@/domain/v3-schemas";
+import { brainResponse, brainStreamBody, expectNoSeriousAxeViolations } from "./helpers";
 
 const fullExtractionMarker = "FULL-SOURCE-EXTRACTION-MUST-STAY-TEMPORARY";
 
 test("requires partial-extraction acknowledgement and reloads only the confirmed digest", async ({ page }) => {
-  let brainRequest: BrainRequest | null = null;
+  let brainRequest: V3BrainRequest | null = null;
   let contextCalls = 0;
   await page.route("**/api/context", async (route) => {
     contextCalls += 1;
@@ -42,9 +42,9 @@ test("requires partial-extraction acknowledgement and reloads only the confirmed
     });
   });
   await page.route("**/api/brain", async (route) => {
-    brainRequest = route.request().postDataJSON() as BrainRequest;
+    brainRequest = route.request().postDataJSON() as V3BrainRequest;
     const response = brainResponse(brainRequest, teamBillingSnapshots[0], teamBillingPrompts[1]);
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(response) });
+    await route.fulfill({ status: 200, contentType: "application/x-ndjson", body: brainStreamBody(response, brainRequest) });
   });
 
   await page.goto("/");

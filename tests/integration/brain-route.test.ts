@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { POST } from "@/app/api/brain/route";
 import { createEmptyQuestionRoadmap, createInitialContextDigest, emptySpecification } from "@/domain/initial-state";
+import { migrateSpecificationToV3 } from "@/domain/v3-invariants";
 
 const originalEnvironment = {
   LIVE_AI_ENABLED: process.env.LIVE_AI_ENABLED,
@@ -45,8 +46,15 @@ function validBody(): Record<string, unknown> {
     confirmedContextDigest: createInitialContextDigest(),
     questionRoadmap: createEmptyQuestionRoadmap(),
     relevantSourceExcerpts: [],
-    currentSpecification: emptySpecification,
+    currentSpecification: migrateSpecificationToV3(emptySpecification),
     currentPrompt: null,
+    actionId: "ACTION-001",
+    cancelEpoch: 1,
+    requestedApplicationCap: 1,
+    priorInterviewWindow: null,
+    restoredEntriesForRevalidation: [],
+    decisionBatch: null,
+    externalEvidenceBundle: [],
   };
 }
 
@@ -107,7 +115,7 @@ describe("POST /api/brain guards", () => {
       },
     ];
 
-    const response = await POST(request(body));
+    const response = await POST(request(body, { "x-request-id": "REQUEST-001" }));
 
     expect(response.status).toBe(410);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "INVALID_REQUEST" } });
@@ -131,7 +139,7 @@ describe("POST /api/brain guards", () => {
       },
     }];
 
-    const response = await POST(request(body));
+    const response = await POST(request(body, { "x-request-id": "REQUEST-001" }));
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({

@@ -2,7 +2,9 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, type Route } from "@playwright/test";
 import { teamBillingPrompts, teamBillingSnapshots } from "@/demo/team-billing-snapshots";
 import { createEmptyQuestionRoadmap } from "@/domain/initial-state";
-import type { BrainRequest, InterviewPrompt, Specification } from "@/domain/types";
+import type { InterviewPrompt, Specification } from "@/domain/types";
+import { migrateSpecificationToV3 } from "@/domain/v3-invariants";
+import type { V3BrainRequest, V3BrainResponse } from "@/domain/v3-schemas";
 
 export async function expectNoSeriousAxeViolations(page: Page): Promise<void> {
   const results = await new AxeBuilder({ page }).analyze();
@@ -30,15 +32,17 @@ export async function createTypedDraft(page: Page, text: string): Promise<void> 
 }
 
 export function brainResponse(
-  request: BrainRequest,
+  request: V3BrainRequest,
   specification: Specification = teamBillingSnapshots[0],
   nextPrompt: InterviewPrompt | null = teamBillingPrompts[1],
-) {
+): V3BrainResponse {
+  const revision = request.operation === "revalidate_restored" ? request.baseRevision : request.baseRevision + 1;
+  const roadmap = createEmptyQuestionRoadmap(revision);
   return {
     schemaVersion: 1,
     requestId: request.requestId,
     baseRevision: request.baseRevision,
-    revision: request.baseRevision + 1,
+    revision,
     provenance: {
       source: "live_ai",
       agent: "brain",
@@ -48,20 +52,59 @@ export function brainResponse(
       repairAttempted: false,
     },
     output: {
-      specification,
-      questionRoadmap: createEmptyQuestionRoadmap(request.baseRevision + 1),
-      nextPrompt,
+      specification: migrateSpecificationToV3(specification),
+      questionRoadmap: roadmap,
+      nextPrompt: nextPrompt
+        ? { ...nextPrompt, recommendation: nextPrompt.recommendation ? { ...nextPrompt.recommendation, externalEvidenceIds: [] } : null }
+        : null,
       changeSummary: ["Applied a validated test revision."],
+      interviewWindow: {
+        id: `WINDOW-E2E-${revision}`,
+        approvedAtRevision: revision,
+        dependencyVersion: roadmap.dependencyVersion,
+        independentOfOperation: request.operation,
+        applicationCap: request.requestedApplicationCap,
+        permits: [],
+      },
+      priorPermitDispositions: (request.priorInterviewWindow?.permits ?? []).map((permit) => ({
+        priorWindowId: request.priorInterviewWindow!.id,
+        priorPermitId: permit.id,
+        roadmapItemId: permit.roadmapItemId,
+        status: "dependency_invalidated" as const,
+        reason: "The mocked authoritative revision invalidated this prior permit.",
+        revalidatedAtRevision: revision,
+        dependencyVersion: roadmap.dependencyVersion,
+      })),
     },
   };
 }
 
-export async function fulfillBrain(route: Route, responder?: (request: BrainRequest) => unknown): Promise<BrainRequest> {
-  const request = route.request().postDataJSON() as BrainRequest;
+export function brainStreamBody(response: unknown, request?: V3BrainRequest): string {
+  const lifecycle = request
+    ? [{
+        type: "lifecycle",
+        event: {
+          schemaVersion: 1,
+          requestId: request.requestId,
+          actionId: request.actionId,
+          baseRevision: request.baseRevision,
+          cancelEpoch: request.cancelEpoch,
+          attempt: 1,
+          sequence: 0,
+          observedAt: new Date().toISOString(),
+          kind: "request_accepted",
+        },
+      }]
+    : [];
+  return `${[...lifecycle, { type: "result", response }].map((envelope) => JSON.stringify(envelope)).join("\n")}\n`;
+}
+
+export async function fulfillBrain(route: Route, responder?: (request: V3BrainRequest) => unknown): Promise<V3BrainRequest> {
+  const request = route.request().postDataJSON() as V3BrainRequest;
   await route.fulfill({
     status: 200,
-    contentType: "application/json",
-    body: JSON.stringify(responder ? responder(request) : brainResponse(request)),
+    contentType: "application/x-ndjson",
+    body: brainStreamBody(responder ? responder(request) : brainResponse(request), request),
   });
   return request;
 }

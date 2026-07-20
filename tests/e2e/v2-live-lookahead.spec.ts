@@ -1,8 +1,9 @@
 import { expect, test, type Route } from "@playwright/test";
 
 import { teamBillingPrompts, teamBillingSnapshots } from "@/demo/team-billing-snapshots";
-import type { BrainRequest, QuestionRoadmap } from "@/domain/types";
-import { brainResponse, createTypedDraft, expectNoSeriousAxeViolations, startLiveText } from "./helpers";
+import type { QuestionRoadmap } from "@/domain/types";
+import type { V3BrainRequest } from "@/domain/v3-schemas";
+import { brainResponse, brainStreamBody, createTypedDraft, expectNoSeriousAxeViolations, startLiveText } from "./helpers";
 
 function roadmapWithLookahead(revision: number): QuestionRoadmap {
   return {
@@ -43,15 +44,15 @@ test("deduplicates confirmation and quarantines a clarified summary after depend
   let answerCalls = 0;
   let summaryCalls = 0;
   let heldAnswerRoute: Route | null = null;
-  let heldAnswerRequest: BrainRequest | null = null;
+  let heldAnswerRequest: V3BrainRequest | null = null;
 
   await page.route("**/api/brain", async (route) => {
-    const request = route.request().postDataJSON() as BrainRequest;
+    const request = route.request().postDataJSON() as V3BrainRequest;
     if (request.operation === "initialize") {
       initializeCalls += 1;
       const response = brainResponse(request);
       response.output.questionRoadmap = roadmapWithLookahead(1);
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(response) });
+      await route.fulfill({ status: 200, contentType: "application/x-ndjson", body: brainStreamBody(response, request) });
       return;
     }
     if (request.operation === "decision_summary") {
@@ -84,7 +85,7 @@ test("deduplicates confirmation and quarantines a clarified summary after depend
   expect(heldAnswerRequest).not.toBeNull();
   const response = brainResponse(heldAnswerRequest!, teamBillingSnapshots[1], teamBillingPrompts[2]);
   response.output.questionRoadmap = staleRoadmap(2);
-  await heldAnswerRoute!.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(response) });
+  await heldAnswerRoute!.fulfill({ status: 200, contentType: "application/x-ndjson", body: brainStreamBody(response, heldAnswerRequest!) });
 
   await expect(page.getByText("Not applied").first()).toBeVisible();
   await expect(page.getByText("Billing basis now depends on the authoritative permissions revision.", { exact: true })).toBeVisible();

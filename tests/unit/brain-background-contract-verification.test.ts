@@ -22,22 +22,20 @@ describe("background Brain contract verification", () => {
     const route = readFileSync("src/app/api/brain/route.ts", "utf8");
     expect(route).toContain("export const maxDuration = 620");
     expect(route).toContain("OPENAI_BRAIN_TIMEOUT_MS");
-    expect(route).toMatch(/runBrain\(parsed\.data,\s*\{[\s\S]*?timeoutMs(?:\s*:|\s*,)/);
+    expect(route).toMatch(/createLiveBrainHarness\(configuration,\s*\{\s*timeoutMs\s*\}\)/);
 
     const example = readFileSync(".env.example", "utf8");
     expect(example).toMatch(/^OPENAI_BRAIN_TIMEOUT_MS=300000$/m);
   });
 
   it("creates a non-stored background response, polls only active states, and attempts cancellation", () => {
-    const runner = readFileSync("src/agents/brain/run-brain.ts", "utf8");
+    const runner = readFileSync("src/agents/brain/run-v3-brain.ts", "utf8");
     expect(runner).toMatch(/background:\s*true/);
     expect(runner).toMatch(/store:\s*false/);
     expect(runner).toContain('responseStatus(response) === "queued"');
     expect(runner).toContain('responseStatus(response) === "in_progress"');
-    expect(runner).toContain("responses.retrieve(providerResponseId");
-    expect(runner).toMatch(
-      /bestEffortCancel\(\s*responses,\s*providerResponseId,\s*trace,\s*sequence \+ 1,?\s*\)/,
-    );
+    expect(runner).toContain("responses.retrieve(id");
+    expect(runner).toMatch(/bestEffortCancel\(responses,\s*id\)/);
   });
 
   it("documents temporary background retention without claiming live verification", () => {

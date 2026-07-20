@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { teamBillingPrompts, teamBillingSnapshots } from "@/demo/team-billing-snapshots";
-import { brainResponse, downloadText, expectNoSeriousAxeViolations, startLiveText } from "./helpers";
+import { brainResponse, brainStreamBody, downloadText, expectNoSeriousAxeViolations, startLiveText } from "./helpers";
 
 test("defers, finalizes with follow-ups, resumes, and exports", async ({ page }) => {
   let confirmedTurnCount = -1;
@@ -18,12 +18,12 @@ test("defers, finalizes with follow-ups, resumes, and exports", async ({ page })
     }
     await route.fulfill({
       status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(brainResponse(
+      contentType: "application/x-ndjson",
+      body: brainStreamBody(brainResponse(
         request,
         request.operation === "initialize" ? teamBillingSnapshots[0] : teamBillingSnapshots.at(-1)!,
         request.operation === "initialize" || request.operation === "resume" ? teamBillingPrompts[1] : null,
-      )),
+      ), request),
     });
   });
 

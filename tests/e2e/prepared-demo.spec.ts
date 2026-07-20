@@ -30,13 +30,14 @@ test("completes the keyboard-driven Prepared Demo and exports labeled Markdown",
 
   const start = page.getByRole("button", { name: "Run prepared demo" });
   await start.focus();
-  await page.keyboard.press("Enter");
+  await start.press("Enter");
   await expect(page.getByText("Prepared demo • no AI call", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Start with reviewed context" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "team-billing-project-brief.md" })).toBeVisible();
   await expect(page.getByText(/does not read a user file or make a network, microphone, or AI call/)).toBeVisible();
-  await page.getByRole("button", { name: "Prepare bundled context" }).focus();
-  await page.keyboard.press("Enter");
+  const prepare = page.getByRole("button", { name: "Prepare bundled context" });
+  await prepare.focus();
+  await prepare.press("Enter");
   await expect(page.getByRole("heading", { name: "Review Project Context Digest" })).toBeVisible();
   await expect(page.getByText("Source: team-billing-project-brief.md · Roles")).toBeVisible();
   await expectNoSeriousAxeViolations(page);
@@ -46,19 +47,37 @@ test("completes the keyboard-driven Prepared Demo and exports labeled Markdown",
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   await page.getByRole("button", { name: "Use prepared answer" }).click();
-  await expect(page.getByText("One safe lookahead")).toBeVisible();
-  await expect(page.getByText("Non-authoritative")).toBeVisible();
-  await expect(page.getByText("Uncertainty retained")).toBeVisible();
-  await page.getByRole("button", { name: "Confirm and queue pending revalidation" }).click();
-  await expect(page.getByText("Not applied").first()).toBeVisible();
-  await expect(page.getByText(/queued lookahead approval no longer matches/).first()).toBeVisible();
-  await expect(page.getByText("Revision 2")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Persistent Brain Status" })).toContainText("Brain working");
+  await expect(page.getByText("Prepared fixture clock")).toBeVisible();
 
-  for (let turn = 0; turn < 6; turn += 1) {
-    const next = page.getByRole("button", { name: "Use prepared answer" });
-    await next.focus();
-    await page.keyboard.press("Enter");
-  }
+  await page.getByRole("button", { name: "Use prepared answer" }).click();
+  await expect(page.getByText("One active Brain-approved decision")).toBeVisible();
+  await expect(page.getByText("1 future permitted topic")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /What is the billing unit/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /When do invited, accepted/ })).toHaveCount(0);
+  await expect(page.getByText("Use active seats billed monthly in USD.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Advance prepared walkthrough" })).toHaveCount(0);
+  await expectNoSeriousAxeViolations(page);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  await page.getByRole("button", { name: "Confirm decision and continue" }).click();
+  await expect(page.getByText("Confirmed — awaiting dependency check").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /When do invited, accepted/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Advance prepared walkthrough" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Confirm decision and continue" }).click();
+  await expect(page.getByText("Confirmed — awaiting dependency check")).toHaveCount(2);
+  await page.getByRole("button", { name: "Advance prepared walkthrough" }).click();
+  await expect(page.getByText("Taking longer than usual", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Advance prepared walkthrough" }).click();
+  await expect(page.getByText("Revision applied", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Advance prepared walkthrough" }).click();
+  await expect(page.getByText("Not Applied", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reuse wording" })).toBeVisible();
+  await page.getByRole("button", { name: "Advance prepared walkthrough" }).click();
+  await expect(page.getByText("Applying", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Advance prepared walkthrough" }).click();
+  await expect(page.getByText("Applied", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Advance prepared walkthrough" }).click();
 
   await expect(page.getByText("Final Review", { exact: true })).toBeVisible();
   await expect(page.getByText(/ready with follow ups/i).first()).toBeVisible();
