@@ -8,11 +8,18 @@ import type {
   SpecificationItem,
   VisualAid,
 } from "@/domain/types";
+import {
+  validateConfirmedProjectContextDigest,
+  validateQuestionRoadmap,
+} from "@/domain/v2-invariants";
 
 export interface SemanticValidationResult {
   valid: boolean;
   errors: string[];
 }
+
+export const MAX_RELEVANT_SOURCE_EXCERPTS = 6;
+export const MAX_RELEVANT_SOURCE_EXCERPT_CHARACTERS = 24_000;
 
 type ItemSection = Exclude<
   keyof Specification,
@@ -70,6 +77,17 @@ const insignificantWords = new Set([
   "with",
 ]);
 
+const authoritativeTurnTypes = new Set<ConversationTurn["type"]>([
+  "confirmed_answer",
+  "confirmed_decision_summary",
+  "correction",
+]);
+
+interface ProvenanceSource {
+  text: string;
+  authoritative: boolean;
+}
+
 function itemMap(specification: Specification): Map<string, SpecificationItem> {
   return new Map(itemSections.flatMap(({ key }) => specification[key]).map((item) => [item.id, item]));
 }
@@ -94,6 +112,19 @@ function retainedMeaningIsCompatible(before: string, after: string): boolean {
   return overlap / Math.min(oldWords.size, newWords.size) >= 0.4;
 }
 
+function textIsGrounded(candidate: string, sources: readonly string[]): boolean {
+  const candidateWords = normalizedMeaningWords(candidate);
+  if (candidateWords.size === 0) return false;
+
+  return sources.some((source) => {
+    const sourceWords = normalizedMeaningWords(source);
+    if (sourceWords.size === 0) return false;
+    let overlap = 0;
+    for (const word of candidateWords) if (sourceWords.has(word)) overlap += 1;
+    return overlap / Math.min(candidateWords.size, sourceWords.size) >= 0.35;
+  });
+}
+
 function exactlyOneQuestion(text: string): boolean {
   return (text.match(/\?/g) ?? []).length === 1;
 }
@@ -112,7 +143,7 @@ function setEquals(actual: readonly string[], expected: readonly string[]): bool
 
 function validateDerivedItem(
   item: SpecificationItem,
-  turnsById: ReadonlyMap<string, ConversationTurn>,
+  sourcesById: ReadonlyMap<string, ProvenanceSource>,
   errors: string[],
 ): void {
   if (item.status !== "derived") return;
@@ -122,21 +153,17 @@ function validateDerivedItem(
   }
 
   const sourceText = item.sourceTurnIds
-    .map((id) => turnsById.get(id))
-    .filter(
-      (turn): turn is ConversationTurn =>
-        turn !== undefined && (turn.type === "confirmed_answer" || turn.type === "correction"),
-    )
-    .map((turn) => turn.text)
+    .map((id) => sourcesById.get(id))
+    .filter((source): source is ProvenanceSource => source?.authoritative === true)
+    .map((source) => source.text)
     .join(" ")
     .toLowerCase();
 
   const hasOnlyConfirmedSources = item.sourceTurnIds.every((id) => {
-    const turn = turnsById.get(id);
-    return turn?.type === "confirmed_answer" || turn?.type === "correction";
+    return sourcesById.get(id)?.authoritative === true;
   });
   if (!hasOnlyConfirmedSources) {
-    errors.push(`${item.id}: derived items may cite only confirmed answers or corrections`);
+    errors.push(`${item.id}: derived items may cite only confirmed digest statements or confirmed turns`);
   }
 
   const unsupportedConstraints = [...item.statement.matchAll(consequentialToken)]
@@ -151,7 +178,7 @@ function validateDerivedItem(
 function validateAcceptanceCriterion(
   criterion: AcceptanceCriterion,
   validRequirementIds: ReadonlySet<string>,
-  turnsById: ReadonlyMap<string, ConversationTurn>,
+  sourcesById: ReadonlyMap<string, ProvenanceSource>,
   errors: string[],
 ): void {
   for (const requirementId of criterion.requirementIds) {
@@ -160,13 +187,12 @@ function validateAcceptanceCriterion(
     }
   }
   for (const sourceTurnId of criterion.sourceTurnIds) {
-    if (!turnsById.has(sourceTurnId)) errors.push(`${criterion.id}: unknown source turn ${sourceTurnId}`);
+    if (!sourcesById.has(sourceTurnId)) errors.push(`${criterion.id}: unknown source turn ${sourceTurnId}`);
   }
   if (criterion.sourceTurnIds.length === 0) errors.push(`${criterion.id}: sourceTurnIds must not be empty`);
   if (criterion.status === "confirmed" || criterion.status === "derived") {
     const hasOnlyConfirmedSources = criterion.sourceTurnIds.every((id) => {
-      const turn = turnsById.get(id);
-      return turn?.type === "confirmed_answer" || turn?.type === "correction";
+      return sourcesById.get(id)?.authoritative === true;
     });
     if (!hasOnlyConfirmedSources) {
       errors.push(`${criterion.id}: ${criterion.status} criteria require confirmed sources`);
@@ -221,16 +247,18 @@ function validatePrompt(
   prompt: InterviewPrompt,
   specification: Specification,
   validItemIds: ReadonlySet<string>,
+  confirmedEvidence: readonly string[],
+  path: "nextPrompt" | "questionRoadmap.lookaheadApproval.prompt",
   errors: string[],
 ): void {
   if (!exactlyOneQuestion(prompt.detailedQuestion)) {
-    errors.push("nextPrompt.detailedQuestion must contain exactly one question");
+    errors.push(`${path}.detailedQuestion must contain exactly one question`);
   }
   if (!exactlyOneQuestion(prompt.spokenQuestion)) {
-    errors.push("nextPrompt.spokenQuestion must contain exactly one question");
+    errors.push(`${path}.spokenQuestion must contain exactly one question`);
   }
   if (!questionsShareDecision(prompt.detailedQuestion, prompt.spokenQuestion)) {
-    errors.push("nextPrompt detailed and spoken forms must ask the same decision");
+    errors.push(`${path} detailed and spoken forms must ask the same decision`);
   }
   const detailedConstraints = new Set(
     [...prompt.detailedQuestion.matchAll(consequentialToken)].map((match) => match[0].toLowerCase()),
@@ -238,17 +266,265 @@ function validatePrompt(
   const spokenAddsConstraint = [...prompt.spokenQuestion.matchAll(consequentialToken)]
     .map((match) => match[0].toLowerCase())
     .some((token) => !detailedConstraints.has(token));
-  if (spokenAddsConstraint) errors.push("nextPrompt.spokenQuestion adds a constraint absent from detailedQuestion");
+  if (spokenAddsConstraint) errors.push(`${path}.spokenQuestion adds a constraint absent from detailedQuestion`);
+
+  for (const context of prompt.confirmedContext) {
+    if (!textIsGrounded(context, confirmedEvidence)) {
+      errors.push(`${path}.confirmedContext is not grounded in confirmed input`);
+    }
+  }
 
   if (prompt.recommendation) {
     const hasConfirmedEvidence = itemSections.some(({ key }) =>
       specification[key].some((item) => item.status === "confirmed" && item.sourceTurnIds.length > 0),
     );
     if (!hasConfirmedEvidence || prompt.confirmedContext.length === 0) {
-      errors.push("nextPrompt.recommendation lacks confirmed evidence");
+      errors.push(`${path}.recommendation lacks confirmed evidence`);
     }
   }
   if (prompt.visualAid) validateVisualAid(prompt.visualAid, validItemIds, errors);
+}
+
+function specificationIsEmpty(specification: Specification): boolean {
+  return (
+    itemSections.every(({ key }) => specification[key].length === 0) &&
+    specification.acceptanceCriteria.length === 0 &&
+    specification.nextActions.length === 0
+  );
+}
+
+function expectedLatestTurnType(operation: BrainRequest["operation"]): ConversationTurn["type"] | null {
+  switch (operation) {
+    case "answer":
+      return "confirmed_answer";
+    case "correct":
+      return "correction";
+    case "defer":
+      return "deferred_prompt";
+    case "decision_summary":
+      return "confirmed_decision_summary";
+    case "initialize":
+    case "resume":
+      return null;
+  }
+}
+
+/** Validates approval, provenance, and context-budget rules before any provider call. */
+export function validateBrainRequest(request: BrainRequest): SemanticValidationResult {
+  const errors: string[] = [];
+  const digest = validateConfirmedProjectContextDigest(request.confirmedContextDigest);
+  errors.push(...digest.errors.map((error) => `confirmedContextDigest: ${error}`));
+
+  const preparedSources = request.confirmedContextDigest.sources.filter((source) => source.kind === "prepared_sample");
+  if (preparedSources.length > 0) errors.push("confirmedContextDigest: Prepared Demo sources are forbidden in Live Mode");
+
+  const requestRoadmap = validateQuestionRoadmap(request.questionRoadmap);
+  errors.push(...requestRoadmap.errors.map((error) => `questionRoadmap: ${error}`));
+  if (request.questionRoadmap.baseRevision !== request.baseRevision) {
+    errors.push("questionRoadmap.baseRevision must match the request baseRevision");
+  }
+
+  if (request.relevantSourceExcerpts.length > MAX_RELEVANT_SOURCE_EXCERPTS) {
+    errors.push(`relevantSourceExcerpts must contain at most ${MAX_RELEVANT_SOURCE_EXCERPTS} excerpts`);
+  }
+  const excerptCharacters = request.relevantSourceExcerpts.reduce((total, excerpt) => total + excerpt.text.length, 0);
+  if (excerptCharacters > MAX_RELEVANT_SOURCE_EXCERPT_CHARACTERS) {
+    errors.push(`relevantSourceExcerpts exceed the ${MAX_RELEVANT_SOURCE_EXCERPT_CHARACTERS} character budget`);
+  }
+  const sourceIds = new Set(request.confirmedContextDigest.sources.map((source) => source.id));
+  const excerptIds = new Set<string>();
+  for (const excerpt of request.relevantSourceExcerpts) {
+    if (excerptIds.has(excerpt.id)) errors.push(`${excerpt.id}: duplicate relevant source excerpt ID`);
+    excerptIds.add(excerpt.id);
+    if (!sourceIds.has(excerpt.sourceId)) errors.push(`${excerpt.id}: excerpt references an unknown digest source`);
+    if (excerpt.reference.sourceId !== excerpt.sourceId) {
+      errors.push(`${excerpt.id}: excerpt source and source reference do not match`);
+    }
+  }
+
+  const turnIds = new Set<string>();
+  const digestStatementIds = new Set(request.confirmedContextDigest.statements.map((statement) => statement.id));
+  for (const turn of request.turns) {
+    if (turnIds.has(turn.id)) errors.push(`${turn.id}: duplicate conversation turn ID`);
+    if (digestStatementIds.has(turn.id)) errors.push(`${turn.id}: turn ID collides with digest provenance`);
+    turnIds.add(turn.id);
+  }
+
+  const requestSources = new Map<string, ProvenanceSource>([
+    ...request.turns.map((turn) => [
+      turn.id,
+      { text: turn.text, authoritative: authoritativeTurnTypes.has(turn.type) },
+    ] as const),
+    ...request.confirmedContextDigest.statements.map((statement) => [
+      statement.id,
+      { text: statement.statement, authoritative: true },
+    ] as const),
+  ]);
+  const currentItems = itemMap(request.currentSpecification);
+  for (const { key } of itemSections) {
+    for (const item of request.currentSpecification[key]) {
+      for (const sourceId of item.sourceTurnIds) {
+        if (!requestSources.has(sourceId)) errors.push(`${item.id}: current Specification has unknown provenance ${sourceId}`);
+      }
+      if ((item.status === "confirmed" || item.status === "derived") &&
+        !item.sourceTurnIds.every((sourceId) => requestSources.get(sourceId)?.authoritative === true)) {
+        errors.push(`${item.id}: current ${item.status} item cites non-authoritative input`);
+      }
+    }
+  }
+  for (const criterion of request.currentSpecification.acceptanceCriteria) {
+    for (const sourceId of criterion.sourceTurnIds) {
+      if (!requestSources.has(sourceId)) errors.push(`${criterion.id}: current criterion has unknown provenance ${sourceId}`);
+    }
+    if ((criterion.status === "confirmed" || criterion.status === "derived") &&
+      !criterion.sourceTurnIds.every((sourceId) => requestSources.get(sourceId)?.authoritative === true)) {
+      errors.push(`${criterion.id}: current ${criterion.status} criterion cites non-authoritative input`);
+    }
+  }
+  for (const item of request.questionRoadmap.items) {
+    for (const sourceItemId of item.sourceItemIds) {
+      if (!currentItems.has(sourceItemId)) errors.push(`${item.id}: current roadmap has unknown Specification source ${sourceItemId}`);
+    }
+  }
+  const currentRoadmapItem = request.questionRoadmap.currentDecisionItemId
+    ? request.questionRoadmap.items.find((item) => item.id === request.questionRoadmap.currentDecisionItemId)
+    : null;
+  if (currentRoadmapItem && request.currentPrompt?.decisionKey !== currentRoadmapItem.decisionKey) {
+    errors.push("currentPrompt decisionKey must match the current Question Roadmap item");
+  }
+  if (demoMarker.test(JSON.stringify({
+    specification: request.currentSpecification,
+    roadmap: request.questionRoadmap,
+  }))) {
+    errors.push("Live request contains a Prepared Demo marker");
+  }
+
+  const expectedType = expectedLatestTurnType(request.operation);
+  const latestTurn = request.turns.at(-1);
+  if (expectedType && latestTurn?.type !== expectedType) {
+    errors.push(`${request.operation} requires the latest turn to be ${expectedType}`);
+  }
+  if (request.operation === "initialize") {
+    if (request.baseRevision !== 0) errors.push("initialize requires baseRevision 0");
+    if (!specificationIsEmpty(request.currentSpecification)) {
+      errors.push("initialize requires an empty current Specification");
+    }
+    if (request.questionRoadmap.items.length > 0) errors.push("initialize requires an empty Question Roadmap");
+    if (request.turns.some((turn) => !authoritativeTurnTypes.has(turn.type))) {
+      errors.push("initialize may contain only PM-confirmed input");
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+function validateRoadmapOutput(
+  request: BrainRequest,
+  output: BrainModelOutput,
+  validItemIds: ReadonlySet<string>,
+  confirmedEvidence: readonly string[],
+  errors: string[],
+): void {
+  const roadmap = output.questionRoadmap;
+  const validation = validateQuestionRoadmap(roadmap);
+  errors.push(...validation.errors.map((error) => `questionRoadmap: ${error}`));
+
+  const nextRevision = request.baseRevision + 1;
+  if (roadmap.baseRevision !== nextRevision) {
+    errors.push("questionRoadmap.baseRevision must match the complete output revision");
+  }
+  if (roadmap.id !== request.questionRoadmap.id) errors.push("questionRoadmap must preserve its stable ID");
+
+  const outputById = new Map(roadmap.items.map((item) => [item.id, item] as const));
+  const outputByDecisionKey = new Map(roadmap.items.map((item) => [item.decisionKey, item] as const));
+  for (const oldItem of request.questionRoadmap.items) {
+    const retained = outputById.get(oldItem.id);
+    if (!retained) {
+      errors.push(`${oldItem.id}: roadmap items must be retained across revisions`);
+      if (outputByDecisionKey.has(oldItem.decisionKey)) {
+        errors.push(`${oldItem.decisionKey}: unchanged roadmap meaning received a new stable ID`);
+      }
+      continue;
+    }
+    if (
+      retained.decisionKey !== oldItem.decisionKey ||
+      !retainedMeaningIsCompatible(oldItem.topic, retained.topic)
+    ) {
+      errors.push(`${oldItem.id}: existing roadmap ID changed meaning`);
+    }
+  }
+
+  const decisionKeys = new Set<string>();
+  const priorities = new Set<number>();
+  for (const item of roadmap.items) {
+    if (decisionKeys.has(item.decisionKey)) errors.push(`${item.decisionKey}: duplicate roadmap decision key`);
+    decisionKeys.add(item.decisionKey);
+    if (item.status !== "resolved") {
+      if (priorities.has(item.priority)) errors.push(`${item.priority}: duplicate unresolved roadmap priority`);
+      priorities.add(item.priority);
+    }
+    for (const sourceItemId of item.sourceItemIds) {
+      if (!validItemIds.has(sourceItemId)) errors.push(`${item.id}: unknown Specification source item ${sourceItemId}`);
+    }
+  }
+
+  const resolvedIds = roadmap.items.filter((item) => item.status === "resolved").map((item) => item.id);
+  if (!setEquals(roadmap.completedItemIds, resolvedIds)) {
+    errors.push("questionRoadmap.completedItemIds must exactly match resolved roadmap items");
+  }
+  const unresolvedDependencyIds = new Set(
+    roadmap.items.flatMap((item) =>
+      item.dependencyIds.filter((dependencyId) => outputById.get(dependencyId)?.status !== "resolved"),
+    ),
+  );
+  if (!setEquals(roadmap.unresolvedDependencyIds, [...unresolvedDependencyIds])) {
+    errors.push("questionRoadmap.unresolvedDependencyIds must exactly match unresolved dependencies");
+  }
+
+  if (output.nextPrompt) {
+    const currentItem = roadmap.currentDecisionItemId
+      ? outputById.get(roadmap.currentDecisionItemId)
+      : undefined;
+    if (!currentItem) errors.push("nextPrompt requires a current Question Roadmap item");
+    else {
+      if (currentItem.status === "resolved") errors.push("nextPrompt cannot reference resolved roadmap work");
+      if (currentItem.decisionKey !== output.nextPrompt.decisionKey) {
+        errors.push("nextPrompt decisionKey must match the current Question Roadmap item");
+      }
+    }
+  } else if (roadmap.currentDecisionItemId !== null) {
+    errors.push("questionRoadmap.currentDecisionItemId must be null when there is no nextPrompt");
+  }
+
+  const approval = roadmap.lookaheadApproval;
+  if (approval) {
+    const approvedItem = outputById.get(approval.roadmapItemId);
+    if (approvedItem?.decisionKey !== approval.prompt.decisionKey) {
+      errors.push("Lookahead prompt decisionKey must match its Question Roadmap item");
+    }
+    if (approval.roadmapItemId === roadmap.currentDecisionItemId) {
+      errors.push("Lookahead approval must be independent of the current decision");
+    }
+    if (output.nextPrompt?.id === approval.prompt.id) {
+      errors.push("Lookahead and current prompts must have distinct stable IDs");
+    }
+    validatePrompt(
+      approval.prompt,
+      output.specification,
+      validItemIds,
+      confirmedEvidence,
+      "questionRoadmap.lookaheadApproval.prompt",
+      errors,
+    );
+  }
+
+  const previousApproval = request.questionRoadmap.lookaheadApproval;
+  if (previousApproval && approval?.roadmapItemId !== previousApproval.roadmapItemId) {
+    const staleItem = outputById.get(previousApproval.roadmapItemId);
+    if (!staleItem?.staleReason) {
+      errors.push(`${previousApproval.roadmapItemId}: invalidated Lookahead work requires a stale reason`);
+    }
+  }
 }
 
 /**
@@ -261,11 +537,26 @@ export function validateBrainOutput(
   output: BrainModelOutput,
 ): SemanticValidationResult {
   const errors: string[] = [];
-  const validTurnIds = new Set(request.turns.map((turn) => turn.id));
-  const turnsById = new Map(request.turns.map((turn) => [turn.id, turn]));
+  const sourcesById = new Map<string, ProvenanceSource>([
+    ...request.turns.map((turn) => [
+      turn.id,
+      { text: turn.text, authoritative: authoritativeTurnTypes.has(turn.type) },
+    ] as const),
+    ...request.confirmedContextDigest.statements.map((statement) => [
+      statement.id,
+      { text: statement.statement, authoritative: true },
+    ] as const),
+  ]);
+  const validSourceIds = new Set(sourcesById.keys());
   const oldItems = itemMap(request.currentSpecification);
   const outputItems = itemMap(output.specification);
   const allIds = new Set<string>();
+  const confirmedEvidence = [
+    request.confirmedContextDigest.initialPrompt,
+    ...request.confirmedContextDigest.statements.map((statement) => statement.statement),
+    ...request.turns.filter((turn) => authoritativeTurnTypes.has(turn.type)).map((turn) => turn.text),
+    ...[...outputItems.values()].filter((item) => item.status === "confirmed").map((item) => item.statement),
+  ];
 
   for (const { key, kind, idPattern } of itemSections) {
     for (const item of output.specification[key]) {
@@ -275,22 +566,21 @@ export function validateBrainOutput(
       allIds.add(item.id);
       if (item.sourceTurnIds.length === 0) errors.push(`${item.id}: sourceTurnIds must not be empty`);
       for (const sourceTurnId of item.sourceTurnIds) {
-        if (!validTurnIds.has(sourceTurnId)) errors.push(`${item.id}: unknown source turn ${sourceTurnId}`);
+        if (!validSourceIds.has(sourceTurnId)) errors.push(`${item.id}: unknown source turn ${sourceTurnId}`);
       }
       if (item.status === "confirmed") {
-        const hasOnlyConfirmedSources = item.sourceTurnIds.every((id) => {
-          const turn = turnsById.get(id);
-          return turn?.type === "confirmed_answer" || turn?.type === "correction";
-        });
+        const hasOnlyConfirmedSources = item.sourceTurnIds.every(
+          (id) => sourcesById.get(id)?.authoritative === true,
+        );
         if (!hasOnlyConfirmedSources) {
-          errors.push(`${item.id}: confirmed items require confirmed answers or corrections`);
+          errors.push(`${item.id}: confirmed items require confirmed digest statements or confirmed turns`);
         }
       }
       const oldItem = oldItems.get(item.id);
       if (oldItem && (oldItem.kind !== item.kind || !retainedMeaningIsCompatible(oldItem.statement, item.statement))) {
         errors.push(`${item.id}: existing ID changed meaning or category`);
       }
-      validateDerivedItem(item, turnsById, errors);
+      validateDerivedItem(item, sourcesById, errors);
     }
   }
 
@@ -301,7 +591,7 @@ export function validateBrainOutput(
   for (const criterion of output.specification.acceptanceCriteria) {
     if (allIds.has(criterion.id)) errors.push(`${criterion.id}: duplicate ID`);
     allIds.add(criterion.id);
-    validateAcceptanceCriterion(criterion, validRequirementIds, turnsById, errors);
+    validateAcceptanceCriterion(criterion, validRequirementIds, sourcesById, errors);
   }
   for (const action of output.specification.nextActions) {
     if (allIds.has(action.id)) errors.push(`${action.id}: duplicate ID`);
@@ -327,8 +617,17 @@ export function validateBrainOutput(
   }
 
   if (output.nextPrompt) {
-    validatePrompt(output.nextPrompt, output.specification, new Set(outputItems.keys()), errors);
+    validatePrompt(
+      output.nextPrompt,
+      output.specification,
+      new Set(outputItems.keys()),
+      confirmedEvidence,
+      "nextPrompt",
+      errors,
+    );
   }
+
+  validateRoadmapOutput(request, output, new Set(outputItems.keys()), confirmedEvidence, errors);
 
   if (demoMarker.test(JSON.stringify(output))) errors.push("live output contains a Prepared Demo marker");
 

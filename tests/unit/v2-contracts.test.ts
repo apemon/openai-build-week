@@ -6,6 +6,7 @@ import { sessionReducer } from "@/domain/session-reducer";
 import type { ActiveLookahead, ContextPreparation, DecisionSummary, LookaheadApproval, QuestionRoadmap } from "@/domain/types";
 import { revalidateLookahead, validateProjectContextDigest, validateQuestionRoadmap } from "@/domain/v2-invariants";
 import { createCheckpoint } from "@/lib/session-checkpoint";
+import { MAX_BRAIN_EXCERPT_CHARACTERS, selectRelevantSourceExcerpts } from "@/app/source-excerpts";
 
 const timestamp = "2026-07-20T00:00:00.000Z";
 
@@ -73,6 +74,27 @@ function preparation(): ContextPreparation {
 }
 
 describe("V2 frozen contracts", () => {
+  it("sends only a bounded relevant excerpt subset on routine Brain turns", () => {
+    const currentRoadmap = roadmap();
+    currentRoadmap.currentDecisionItemId = "ROADMAP-001";
+    const extraction = {
+      sourceId: "SOURCE-INITIAL",
+      complete: true,
+      warnings: [],
+      excerpts: Array.from({ length: 10 }, (_, index) => ({
+        id: `EXCERPT-${index + 1}`,
+        sourceId: "SOURCE-INITIAL",
+        text: `${index === 8 ? "Billing permissions owners " : "Background notes "}${"x".repeat(9_000)}`,
+        reference: { sourceId: "SOURCE-INITIAL", location: `Paragraph ${index + 1}`, page: null, heading: null, paragraph: index + 1 },
+      })),
+    };
+    const selected = selectRelevantSourceExcerpts(extraction, currentRoadmap, "Who manages billing permissions?");
+    expect(selected[0].id).toBe("EXCERPT-9");
+    expect(selected).toHaveLength(6);
+    expect(selected.reduce((total, excerpt) => total + excerpt.text.length, 0)).toBeLessThanOrEqual(MAX_BRAIN_EXCERPT_CHARACTERS);
+    expect(selected.reduce((total, excerpt) => total + excerpt.text.length, 0)).toBeLessThan(extraction.excerpts.reduce((total, excerpt) => total + excerpt.text.length, 0));
+  });
+
   it("validates statement-level context provenance and explicit gap acknowledgement", () => {
     const digest = preparation().draftDigest!;
     expect(validateProjectContextDigest(digest)).toEqual({ valid: true, errors: [] });

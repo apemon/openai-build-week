@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { AnswerDraft } from "@/domain/types";
+import type { AnswerDraft, LookaheadApproval } from "@/domain/types";
 
 import type {
+  ClarificationCommunicatorTransport,
   CommunicatorEvent,
   CommunicatorSessionConfig,
   CommunicatorTransport,
@@ -26,7 +27,18 @@ export interface CommunicatorHookError {
 export interface UseCommunicatorOptions {
   transport: CommunicatorTransport;
   onAnswerDraft?: (draft: AnswerDraft) => void;
+  onClarificationTranscript?: (input: {
+    roadmapItemId: string;
+    text: string;
+    source: "transcription";
+  }) => void;
   onEvent?: (event: CommunicatorEvent) => void;
+}
+
+export interface CommunicatorDecisionSummaryDraft {
+  roadmapItemId: string;
+  text: string;
+  uncertainties: string[];
 }
 
 export interface UseCommunicatorResult {
@@ -34,6 +46,9 @@ export interface UseCommunicatorResult {
   microphoneState: MicrophoneState;
   transcriptPreview: string;
   answerDraft: AnswerDraft | null;
+  activeClarificationItemId: string | null;
+  clarificationTranscriptPreview: string;
+  decisionSummaryDraft: CommunicatorDecisionSummaryDraft | null;
   error: CommunicatorHookError | null;
   textFallbackAvailable: boolean;
   connect: (config: CommunicatorSessionConfig) => Promise<boolean>;
@@ -45,30 +60,41 @@ export interface UseCommunicatorResult {
   resumeMicrophone: () => void;
   recordAgain: () => void;
   clearAnswerDraft: () => void;
+  beginClarification: (approval: LookaheadApproval) => boolean;
+  submitClarificationText: (text: string) => boolean;
+  requestDecisionSummary: () => boolean;
+  stopClarification: () => void;
 }
 
 export function useCommunicator({
   transport,
   onAnswerDraft,
+  onClarificationTranscript,
   onEvent,
 }: UseCommunicatorOptions): UseCommunicatorResult {
   const [connectionState, setConnectionState] = useState<CommunicatorConnectionState>("idle");
   const [microphoneState, setMicrophoneState] = useState<MicrophoneState>("off");
   const [transcriptPreview, setTranscriptPreview] = useState("");
   const [answerDraft, setAnswerDraft] = useState<AnswerDraft | null>(null);
+  const [activeClarificationItemId, setActiveClarificationItemId] = useState<string | null>(null);
+  const [clarificationTranscriptPreview, setClarificationTranscriptPreview] = useState("");
+  const [decisionSummaryDraft, setDecisionSummaryDraft] = useState<CommunicatorDecisionSummaryDraft | null>(null);
   const [error, setError] = useState<CommunicatorHookError | null>(null);
   const activePromptId = useRef<string | null>(null);
   const activeItemId = useRef<string | null>(null);
+  const activeClarificationItemIdRef = useRef<string | null>(null);
   const transcriptByItemId = useRef(new Map<string, string>());
   const completedItemIds = useRef(new Set<string>());
   const microphonePausedForTextInput = useRef(false);
   const onAnswerDraftRef = useRef(onAnswerDraft);
+  const onClarificationTranscriptRef = useRef(onClarificationTranscript);
   const onEventRef = useRef(onEvent);
 
   useEffect(() => {
     onAnswerDraftRef.current = onAnswerDraft;
+    onClarificationTranscriptRef.current = onClarificationTranscript;
     onEventRef.current = onEvent;
-  }, [onAnswerDraft, onEvent]);
+  }, [onAnswerDraft, onClarificationTranscript, onEvent]);
 
   useEffect(() => {
     return transport.subscribe((event) => {
@@ -115,7 +141,13 @@ export function useCommunicator({
             4_000,
           );
           transcriptByItemId.current.set(event.itemId, next);
-          if (activeItemId.current === event.itemId) setTranscriptPreview(next);
+          if (activeItemId.current === event.itemId) {
+            if (activeClarificationItemIdRef.current) {
+              setClarificationTranscriptPreview(next);
+            } else {
+              setTranscriptPreview(next);
+            }
+          }
           break;
         }
         case "transcript_completed": {
@@ -123,6 +155,31 @@ export function useCommunicator({
           completedItemIds.current.add(event.itemId);
           transcriptByItemId.current.delete(event.itemId);
           if (activeItemId.current !== event.itemId) break;
+
+          const clarificationItemId = activeClarificationItemIdRef.current;
+          if (clarificationItemId) {
+            const text = event.transcript.trim().slice(0, 4_000);
+            activeItemId.current = null;
+            setTranscriptPreview("");
+            setClarificationTranscriptPreview("");
+            transport.setMicrophoneEnabled(false);
+            setMicrophoneState("off");
+            if (!text) break;
+            onClarificationTranscriptRef.current?.({
+              roadmapItemId: clarificationItemId,
+              text,
+              source: "transcription",
+            });
+            const clarificationTransport = getClarificationTransport(transport);
+            try {
+              clarificationTransport?.submitClarificationText(clarificationItemId, text);
+            } catch {
+              setClarificationTranscriptPreview(text);
+              setConnectionState("text_fallback");
+              setError({ code: "REALTIME_UNAVAILABLE", retryable: true });
+            }
+            break;
+          }
 
           transport.setMicrophoneEnabled(false);
           const draft: AnswerDraft = {
@@ -138,6 +195,16 @@ export function useCommunicator({
           onAnswerDraftRef.current?.(draft);
           break;
         }
+        case "decision_summary_ready":
+          if (event.roadmapItemId !== activeClarificationItemIdRef.current) break;
+          setDecisionSummaryDraft({
+            roadmapItemId: event.roadmapItemId,
+            text: event.text,
+            uncertainties: event.uncertainties,
+          });
+          transport.setMicrophoneEnabled(false);
+          setMicrophoneState("off");
+          break;
         case "error":
           transport.setMicrophoneEnabled(false);
           setMicrophoneState("off");
@@ -184,6 +251,10 @@ export function useCommunicator({
     microphonePausedForTextInput.current = false;
     setTranscriptPreview("");
     setAnswerDraft(null);
+    activeClarificationItemIdRef.current = null;
+    setActiveClarificationItemId(null);
+    setClarificationTranscriptPreview("");
+    setDecisionSummaryDraft(null);
     setMicrophoneState("off");
   }, [transport]);
 
@@ -247,11 +318,81 @@ export function useCommunicator({
     setMicrophoneState("off");
   }, [transport]);
 
+  const beginClarification = useCallback((approval: LookaheadApproval): boolean => {
+    const clarificationTransport = getClarificationTransport(transport);
+    if (!clarificationTransport) {
+      setConnectionState("text_fallback");
+      setError({ code: "REALTIME_CLARIFICATION_UNAVAILABLE", retryable: false });
+      return false;
+    }
+    try {
+      clarificationTransport.beginClarification(approval);
+      activeClarificationItemIdRef.current = approval.roadmapItemId;
+      setActiveClarificationItemId(approval.roadmapItemId);
+      setAnswerDraft(null);
+      setTranscriptPreview("");
+      setClarificationTranscriptPreview("");
+      setDecisionSummaryDraft(null);
+      setMicrophoneState(transport.getMicrophoneState());
+      return true;
+    } catch {
+      setConnectionState("text_fallback");
+      setError({ code: "REALTIME_CLARIFICATION_UNAVAILABLE", retryable: true });
+      return false;
+    }
+  }, [transport]);
+
+  const submitClarificationText = useCallback((text: string): boolean => {
+    const roadmapItemId = activeClarificationItemIdRef.current;
+    const clarificationTransport = getClarificationTransport(transport);
+    if (!roadmapItemId || !clarificationTransport) return false;
+    try {
+      clarificationTransport.submitClarificationText(roadmapItemId, text);
+      setClarificationTranscriptPreview("");
+      setMicrophoneState(transport.getMicrophoneState());
+      return true;
+    } catch {
+      setClarificationTranscriptPreview(text.trim().slice(0, 4_000));
+      setConnectionState("text_fallback");
+      setError({ code: "REALTIME_CLARIFICATION_UNAVAILABLE", retryable: true });
+      return false;
+    }
+  }, [transport]);
+
+  const requestDecisionSummary = useCallback((): boolean => {
+    const roadmapItemId = activeClarificationItemIdRef.current;
+    const clarificationTransport = getClarificationTransport(transport);
+    if (!roadmapItemId || !clarificationTransport) return false;
+    try {
+      clarificationTransport.requestDecisionSummary(roadmapItemId);
+      transport.setMicrophoneEnabled(false);
+      setMicrophoneState("off");
+      return true;
+    } catch {
+      setConnectionState("text_fallback");
+      setError({ code: "REALTIME_DECISION_SUMMARY_UNAVAILABLE", retryable: true });
+      return false;
+    }
+  }, [transport]);
+
+  const stopClarification = useCallback(() => {
+    getClarificationTransport(transport)?.stopClarification();
+    activeClarificationItemIdRef.current = null;
+    activeItemId.current = null;
+    setActiveClarificationItemId(null);
+    setClarificationTranscriptPreview("");
+    transport.setMicrophoneEnabled(false);
+    setMicrophoneState("off");
+  }, [transport]);
+
   return {
     connectionState,
     microphoneState,
     transcriptPreview,
     answerDraft,
+    activeClarificationItemId,
+    clarificationTranscriptPreview,
+    decisionSummaryDraft,
     error,
     textFallbackAvailable: connectionState === "text_fallback",
     connect,
@@ -263,5 +404,21 @@ export function useCommunicator({
     resumeMicrophone,
     recordAgain,
     clearAnswerDraft,
+    beginClarification,
+    submitClarificationText,
+    requestDecisionSummary,
+    stopClarification,
   };
+}
+
+function getClarificationTransport(
+  transport: CommunicatorTransport,
+): ClarificationCommunicatorTransport | null {
+  const candidate = transport as Partial<ClarificationCommunicatorTransport>;
+  return typeof candidate.beginClarification === "function"
+    && typeof candidate.submitClarificationText === "function"
+    && typeof candidate.requestDecisionSummary === "function"
+    && typeof candidate.stopClarification === "function"
+    ? candidate as ClarificationCommunicatorTransport
+    : null;
 }

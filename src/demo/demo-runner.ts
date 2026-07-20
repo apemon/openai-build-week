@@ -1,6 +1,8 @@
 import { preparedTurnAt, teamBillingDecisions } from "./team-billing-scenario";
 import { teamBillingPrompts, teamBillingSnapshots, validatePreparedSnapshots } from "./team-billing-snapshots";
 import type { ConversationTurn, InterviewPrompt, Specification } from "@/domain/types";
+import { preparedContextPreparation, preparedProjectContext, preparedSampleDocument } from "./v2-prepared-context";
+import { preparedQuestionRoadmaps, runPreparedProgress } from "./v2-prepared-flow";
 
 export interface DemoStep {
   index: number;
@@ -9,6 +11,7 @@ export interface DemoStep {
   turn: ConversationTurn;
   specification: Specification;
   nextPrompt: InterviewPrompt | null;
+  questionRoadmap: (typeof preparedQuestionRoadmaps)[number];
 }
 
 export class PreparedDemoRunner {
@@ -20,6 +23,14 @@ export class PreparedDemoRunner {
   get complete() { return this.#index >= this.total; }
   get currentPrompt() { return this.complete ? null : teamBillingPrompts[this.#index]; }
   get currentDecision() { return this.complete ? null : teamBillingDecisions[this.#index]; }
+  get preparedSampleDocument() { return preparedSampleDocument; }
+  get contextPreparation() { return preparedContextPreparation; }
+  get confirmedContextDigest() { return preparedProjectContext; }
+  get currentQuestionRoadmap() { return preparedQuestionRoadmaps[this.#index] ?? preparedQuestionRoadmaps.at(-1)!; }
+
+  runPreparationProgress(onStage: Parameters<typeof runPreparedProgress>[0], delayMs?: number, wait?: Parameters<typeof runPreparedProgress>[2]) {
+    return runPreparedProgress(onStage, delayMs, wait);
+  }
 
   advance(createdAt?: string): DemoStep {
     if (this.complete) throw new Error("Prepared Demo is already complete");
@@ -31,6 +42,7 @@ export class PreparedDemoRunner {
       turn: preparedTurnAt(index, createdAt),
       specification: teamBillingSnapshots[index],
       nextPrompt: teamBillingPrompts[index + 1] ?? null,
+      questionRoadmap: preparedQuestionRoadmaps[index + 1]!,
     };
   }
 

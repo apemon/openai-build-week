@@ -111,4 +111,35 @@ describe("POST /api/brain guards", () => {
     expect(response.status).toBe(410);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "INVALID_REQUEST" } });
   });
+
+  it("rejects semantically invalid digest/excerpt provenance before provider work", async () => {
+    process.env.LIVE_AI_ENABLED = "true";
+    process.env.OPENAI_API_KEY = "test-key-not-a-real-secret";
+    process.env.ALLOWED_ORIGIN = "http://localhost:3000";
+    const body = validBody();
+    body.relevantSourceExcerpts = [{
+      id: "EXCERPT-001",
+      sourceId: "SOURCE-MISSING",
+      text: "Reference content that was not retained by the confirmed digest.",
+      reference: {
+        sourceId: "SOURCE-MISSING",
+        location: "Unknown source",
+        page: null,
+        heading: null,
+        paragraph: 1,
+      },
+    }];
+
+    const response = await POST(request(body));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "INVALID_REQUEST",
+        message: "The Brain request is invalid.",
+        retryable: false,
+        requestId: "REQUEST-001",
+      },
+    });
+  });
 });

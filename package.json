@@ -16,10 +16,12 @@
   },
   "dependencies": {
     "@hookform/resolvers": "latest",
+    "mammoth": "^1.12.0",
     "next": "^16.2.10",
     "openai": "^6.48.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "unpdf": "^1.6.2",
     "zod": "^4.3.5"
   },
   "devDependencies": {

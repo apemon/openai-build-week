@@ -2,6 +2,7 @@ import { createInitialState } from "./initial-state";
 import { assertSessionInvariants } from "./invariants";
 import type { SessionEvent } from "./session-events";
 import type { SessionState } from "./types";
+import { revalidateLookahead } from "./v2-invariants";
 
 export function sessionReducer(state: SessionState, event: SessionEvent): SessionState {
   let next = state;
@@ -79,8 +80,18 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
     case "BRAIN_REQUESTED":
       if (state.pendingRequest) return state;
       if (event.operation !== "initialize" && event.operation !== "resume" && !event.turn) return state;
+      if (event.operation === "initialize" && (!state.confirmedContextDigest || state.revision !== 0 || event.turn)) return state;
+      if (event.operation === "resume" && event.turn) return state;
+      if (event.operation === "answer" && event.turn?.type !== "confirmed_answer") return state;
+      if (event.operation === "correct" && event.turn?.type !== "correction") return state;
+      if (event.operation === "defer" && event.turn?.type !== "deferred_prompt") return state;
       if (event.operation === "answer" || event.operation === "correct") {
         if (state.phase !== "reviewing_answer") return state;
+      }
+      if (event.operation === "decision_summary") {
+        const summary = state.activeLookahead?.decisionSummary;
+        if (state.phase !== "queued_decision_summary" || summary?.status !== "confirmed_queued") return state;
+        if (event.turn?.type !== "confirmed_decision_summary" || event.turn.text !== summary.text) return state;
       }
       next = {
         ...state,
@@ -89,6 +100,12 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
         turns: event.turn ? [...state.turns, event.turn] : state.turns,
         pendingRequest: { requestId: event.requestId, baseRevision: state.revision, operation: event.operation, actionId: event.actionId },
         processingStage: "validating_confirmed_input",
+        activeLookahead: event.operation === "decision_summary" && state.activeLookahead?.decisionSummary
+          ? {
+              ...state.activeLookahead,
+              decisionSummary: { ...state.activeLookahead.decisionSummary, status: "submitted" },
+            }
+          : state.activeLookahead,
         error: null,
       };
       break;
@@ -103,9 +120,10 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
     case "BRAIN_RESPONSE_RECEIVED": {
       const { response } = event;
       if (!state.pendingRequest || response.requestId !== state.pendingRequest.requestId || response.baseRevision !== state.revision || response.revision !== state.revision + 1) return state;
+      const defaultPhase = response.output.nextPrompt ? "presenting_prompt" : "final_review";
       next = {
         ...state,
-        phase: response.output.nextPrompt ? "presenting_prompt" : "final_review",
+        phase: defaultPhase,
         revision: response.revision,
         specification: response.output.specification,
         questionRoadmap: response.output.questionRoadmap,
@@ -114,6 +132,34 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
         processingStage: "idle",
         error: null,
       };
+      if (state.activeLookahead?.decisionSummary?.status === "submitted") {
+        next = { ...next, activeLookahead: null };
+      } else if (state.activeLookahead) {
+        const revalidation = revalidateLookahead(state.activeLookahead, response.output.questionRoadmap);
+        if (revalidation.valid) {
+          const activeLookahead = { ...state.activeLookahead, approval: revalidation.approval };
+          next = {
+            ...next,
+            activeLookahead,
+            phase: activeLookahead.status === "queued"
+              ? "queued_decision_summary"
+              : activeLookahead.status === "summary_draft"
+                ? "reviewing_decision_summary"
+                : "clarifying_lookahead",
+          };
+        } else {
+          const summary = state.activeLookahead.decisionSummary;
+          next = {
+            ...next,
+            phase: defaultPhase,
+            activeLookahead: null,
+            staleLookaheadReason: revalidation.reason,
+            staleDecisionSummaries: summary
+              ? [...state.staleDecisionSummaries, { ...summary, status: "not_applied", staleReason: revalidation.reason }]
+              : state.staleDecisionSummaries,
+          };
+        }
+      }
       break;
     }
     case "PROCESSING_STAGE_CHANGED":
@@ -181,8 +227,25 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
       next = { ...state, revision: state.revision + 1, turns: [...state.turns, event.turn], specification: event.specification, currentPrompt: event.nextPrompt, phase: event.nextPrompt ? "presenting_prompt" : "final_review" };
       break;
     case "ENTER_FINAL_REVIEW":
+      if (state.pendingRequest || state.activeLookahead) return state;
       next = { ...state, phase: "final_review", answerDraft: null, pendingRequest: null, processingStage: "idle", activeLookahead: null };
       break;
+    case "ABANDON_PENDING_AND_ENTER_FINAL_REVIEW": {
+      const summary = state.activeLookahead?.decisionSummary;
+      next = {
+        ...state,
+        phase: "final_review",
+        answerDraft: null,
+        pendingRequest: null,
+        processingStage: "idle",
+        activeLookahead: null,
+        staleLookaheadReason: event.reason,
+        staleDecisionSummaries: summary
+          ? [...state.staleDecisionSummaries, { ...summary, status: "not_applied", staleReason: event.reason }]
+          : state.staleDecisionSummaries,
+      };
+      break;
+    }
     case "FINALIZE":
       next = { ...state, phase: "finalized", lastFinalizedRevision: state.revision, finalizedSpecification: state.specification, answerDraft: null };
       break;

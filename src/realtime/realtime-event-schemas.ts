@@ -79,6 +79,16 @@ const outputTranscriptDoneSchema = z.object({
   transcript,
 });
 
+const outputTextDoneSchema = z.object({
+  event_id: eventId,
+  type: z.literal("response.output_text.done"),
+  response_id: providerId,
+  item_id: providerId,
+  output_index: z.number().int().nonnegative(),
+  content_index: z.number().int().nonnegative(),
+  text: transcript,
+});
+
 const responseDoneSchema = z.object({
   event_id: eventId,
   type: z.literal("response.done"),
@@ -105,6 +115,7 @@ export const realtimeServerEventSchema = z.discriminatedUnion("type", [
   responseCreatedSchema,
   outputTranscriptDeltaSchema,
   outputTranscriptDoneSchema,
+  outputTextDoneSchema,
   responseDoneSchema,
   outputAudioBufferSchema,
 ]);

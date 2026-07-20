@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { logBrainSubmission } from "@/agents/brain/debug-log";
 import { BrainRunError } from "@/agents/brain/retry-policy";
 import { runBrain } from "@/agents/brain/run-brain";
+import { validateBrainRequest } from "@/agents/brain/semantic-validator";
 import { brainRequestSchema } from "@/domain/schemas";
 import type { ApiError } from "@/domain/types";
 
@@ -38,6 +39,8 @@ function statusFor(error: BrainRunError): number {
       return 422;
     case "RATE_LIMITED":
       return 429;
+    case "INVALID_REQUEST":
+      return 400;
     default:
       return 502;
   }
@@ -86,6 +89,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     return errorResponse("INVALID_REQUEST", "The Brain request is invalid.", false, requestId, 400);
   }
   requestId = parsed.data.requestId;
+  const semanticRequest = validateBrainRequest(parsed.data);
+  if (!semanticRequest.valid) {
+    return errorResponse("INVALID_REQUEST", "The Brain request is invalid.", false, requestId, 400);
+  }
 
   const now = Date.now();
   const turnTimes = parsed.data.turns.map((turn) => Date.parse(turn.createdAt));

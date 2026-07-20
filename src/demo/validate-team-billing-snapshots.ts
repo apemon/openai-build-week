@@ -1,7 +1,8 @@
 import { validateBrainOutput } from "@/agents/brain/semantic-validator";
-import { createEmptyQuestionRoadmap, createInitialContextDigest, emptySpecification } from "@/domain/initial-state";
+import { createInitialContextDigest, emptySpecification } from "@/domain/initial-state";
 import { preparedTurnAt } from "./team-billing-scenario";
 import { teamBillingPrompts, teamBillingSnapshots, validatePreparedSnapshots } from "./team-billing-snapshots";
+import { preparedQuestionRoadmaps } from "./v2-prepared-flow";
 
 /** Runs the same semantic validator used for production Brain output. Kept out
  * of the browser runner so Prepared Demo ships only fixture data, not Brain
@@ -20,14 +21,14 @@ export function validateTeamBillingSnapshotsSemantically(): { success: true; sna
         operation: "answer",
         turns,
         confirmedContextDigest: createInitialContextDigest(),
-        questionRoadmap: createEmptyQuestionRoadmap(index),
+        questionRoadmap: preparedQuestionRoadmaps[index]!,
         relevantSourceExcerpts: [],
         currentSpecification: index === 0 ? emptySpecification : teamBillingSnapshots[index - 1],
         currentPrompt: teamBillingPrompts[index],
       },
       {
         specification: teamBillingSnapshots[index],
-        questionRoadmap: createEmptyQuestionRoadmap(index + 1),
+        questionRoadmap: preparedQuestionRoadmaps[index + 1]!,
         nextPrompt: teamBillingPrompts[index + 1] ?? null,
         changeSummary: ["Validated deterministic prepared snapshot."],
       },

@@ -1,0 +1,8 @@
+"use client";
+
+import type { DecisionSummary, SessionMode } from "@/domain/types";
+
+export function StaleWorkPanel({ staleReason, summaries, mode, onReuse }: { staleReason: string | null; summaries: DecisionSummary[]; mode: SessionMode; onReuse?: (text: string) => void }) {
+  if (!staleReason && summaries.length === 0) return null;
+  return <section aria-labelledby="stale-work-title" className="rounded-2xl border border-amber-800 bg-amber-950/20 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h2 id="stale-work-title" className="text-lg font-semibold">Stale lookahead work</h2><span className="rounded-full border border-amber-700 px-3 py-1 text-xs font-semibold text-amber-100">not applied</span></div>{mode === "demo" && <p className="mt-2 text-sm text-amber-100">Prepared demo • no AI call</p>}{staleReason && <p className="mt-3 text-sm leading-6 text-stone-200">{staleReason}</p>}<p className="mt-2 text-xs text-stone-400">This wording did not reach the Brain and did not change the Specification.</p>{summaries.map((summary) => <article key={summary.id} className="mt-4 rounded-xl bg-stone-950 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><strong>Decision Summary · {summary.roadmapItemId}</strong><span className="text-xs text-amber-200">not applied</span></div><p className="mt-2 whitespace-pre-wrap text-sm text-stone-300">{summary.text}</p><p className="mt-2 text-xs text-stone-400">Reason: {summary.staleReason ?? staleReason ?? "The dependency state changed."}</p>{onReuse && <button type="button" onClick={() => onReuse(summary.text)} className="mt-3 min-h-11 rounded-lg border border-stone-600 px-3 text-sm font-semibold">Reuse wording</button>}</article>)}</section>;
+}

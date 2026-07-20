@@ -29,6 +29,53 @@
       "openQuestionIds": []
     }
   },
+  "questionRoadmap": {
+    "id": "ROADMAP-STATE",
+    "baseRevision": 1,
+    "dependencyVersion": "DEPENDENCY-1",
+    "items": [
+      {
+        "id": "ROADMAP-001",
+        "decisionKey": "billing_roles",
+        "topic": "Billing roles and permissions",
+        "status": "unresolved",
+        "priority": 1,
+        "dependencyIds": [],
+        "sourceItemIds": ["PROB-001"],
+        "staleReason": null
+      },
+      {
+        "id": "ROADMAP-002",
+        "decisionKey": "billing_provider",
+        "topic": "Billing provider selection",
+        "status": "unresolved",
+        "priority": 2,
+        "dependencyIds": [],
+        "sourceItemIds": ["PROB-001"],
+        "staleReason": null
+      }
+    ],
+    "currentDecisionItemId": "ROADMAP-001",
+    "completedItemIds": [],
+    "unresolvedDependencyIds": [],
+    "lookaheadApproval": {
+      "roadmapItemId": "ROADMAP-002",
+      "prompt": {
+        "id": "PROMPT-LOOKAHEAD-001",
+        "decisionKey": "billing_provider",
+        "detailedQuestion": "Which billing provider should the product use?",
+        "spokenQuestion": "Which billing provider should it use?",
+        "whyItMatters": "The provider determines the external billing integration boundary.",
+        "confirmedContext": ["The product needs team billing."],
+        "decisionImpact": ["Determines the payment integration dependency."],
+        "recommendation": null,
+        "visualAid": null
+      },
+      "approvedAtRevision": 1,
+      "dependencyVersion": "DEPENDENCY-1",
+      "independentOfOperation": "answer"
+    }
+  },
   "nextPrompt": {
     "id": "PROMPT-001",
     "decisionKey": "billing_roles",

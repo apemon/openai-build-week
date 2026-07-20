@@ -44,6 +44,7 @@ export type SessionEvent =
   | { type: "LOOKAHEAD_QUARANTINED"; reason: string }
   | { type: "DEMO_REVISION_APPLIED"; specification: Specification; nextPrompt: InterviewPrompt | null; turn: ConversationTurn }
   | { type: "ENTER_FINAL_REVIEW" }
+  | { type: "ABANDON_PENDING_AND_ENTER_FINAL_REVIEW"; reason: string }
   | { type: "FINALIZE" }
   | { type: "RESUME_GRILLING" }
   | { type: "NEXT_ACTIONS_UPDATED"; specification: Specification }

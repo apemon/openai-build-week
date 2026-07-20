@@ -12,7 +12,7 @@ import {
   isRepairableBrainError,
   mapProviderError,
 } from "./retry-policy";
-import { validateBrainOutput } from "./semantic-validator";
+import { validateBrainOutput, validateBrainRequest } from "./semantic-validator";
 
 interface ResponsesParser {
   parse: (body: unknown, options?: { signal?: AbortSignal }) => Promise<unknown>;
@@ -132,6 +132,10 @@ async function providerAttempt(
 }
 
 export async function runBrain(request: BrainRequest, options: BrainRunnerOptions = {}): Promise<BrainResponse> {
+  const requestValidation = validateBrainRequest(request);
+  if (!requestValidation.valid) {
+    throw new BrainRunError("INVALID_REQUEST", "The Brain request failed semantic validation.", false);
+  }
   const requestedModel = options.model ?? process.env.OPENAI_BRAIN_MODEL ?? "gpt-5.6";
   const timeoutMs = options.timeoutMs ?? BRAIN_TIMEOUT_MS;
   const responses = options.responses ?? createResponsesParser();

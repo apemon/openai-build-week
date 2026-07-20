@@ -31,12 +31,22 @@ const request = brainRequestSchema.parse({
 });
 
 function providerResponse(output: unknown = validFixture) {
+  const parsedOutput = output === validFixture ? structuredClone(validFixture) : output;
+  if (parsedOutput && typeof parsedOutput === "object" && "questionRoadmap" in parsedOutput && output === validFixture) {
+    const roadmap = (parsedOutput as typeof validFixture).questionRoadmap;
+    roadmap.baseRevision = 5;
+    roadmap.dependencyVersion = "DEPENDENCY-5";
+    if (roadmap.lookaheadApproval) {
+      roadmap.lookaheadApproval.approvedAtRevision = 5;
+      roadmap.lookaheadApproval.dependencyVersion = "DEPENDENCY-5";
+    }
+  }
   return {
     id: "resp_001",
     model: "gpt-5.6-2026-07-01",
     status: "completed",
     output: [],
-    output_parsed: output,
+    output_parsed: parsedOutput,
   };
 }
 
@@ -147,6 +157,18 @@ describe("runBrain", () => {
       retryable: true,
     });
     expect(parse).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects Live requests with Prepared Demo provenance before any provider call", async () => {
+    const parse = vi.fn();
+    const invalidRequest = structuredClone(request);
+    invalidRequest.confirmedContextDigest.sources[0].kind = "prepared_sample";
+
+    await expect(runBrain(invalidRequest, { responses: { parse } })).rejects.toMatchObject({
+      code: "INVALID_REQUEST",
+      retryable: false,
+    });
+    expect(parse).not.toHaveBeenCalled();
   });
 
   it("maps an SDK connection wrapper with a nested abort as a timeout", async () => {
