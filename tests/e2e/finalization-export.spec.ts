@@ -6,7 +6,9 @@ test("defers, finalizes with follow-ups, resumes, and exports", async ({ page })
   let confirmedTurnCount = -1;
   await page.route("**/api/brain", async (route) => {
     const request = route.request().postDataJSON();
-    if (request.operation === "defer") {
+    if (request.operation === "initialize") {
+      expect(request.turns).toHaveLength(0);
+    } else if (request.operation === "defer") {
       expect(request.turns.at(-1)?.type).toBe("deferred_prompt");
       expect(request.turns.at(-1)?.text).toContain("Pricing committee meets Friday");
       confirmedTurnCount = request.turns.length;
@@ -17,7 +19,11 @@ test("defers, finalizes with follow-ups, resumes, and exports", async ({ page })
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(brainResponse(request, teamBillingSnapshots.at(-1)!, request.operation === "resume" ? teamBillingPrompts[1] : null)),
+      body: JSON.stringify(brainResponse(
+        request,
+        request.operation === "initialize" ? teamBillingSnapshots[0] : teamBillingSnapshots.at(-1)!,
+        request.operation === "initialize" || request.operation === "resume" ? teamBillingPrompts[1] : null,
+      )),
     });
   });
 

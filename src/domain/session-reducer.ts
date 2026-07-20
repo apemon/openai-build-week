@@ -34,6 +34,9 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
         temporaryExtractionAvailable: event.preparation.temporaryExtraction !== null,
       };
       break;
+    case "CONTEXT_PREPARATION_FAILED":
+      next = { ...state, phase: "preparing_context", contextPreparation: null, temporaryExtractionAvailable: false };
+      break;
     case "CONTEXT_DIGEST_EDITED":
       if (state.phase !== "reviewing_context" || !state.contextPreparation) return state;
       next = { ...state, contextPreparation: { ...state.contextPreparation, draftDigest: event.digest } };
@@ -55,6 +58,10 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
       break;
     case "TEMPORARY_EXTRACTION_LOST":
       next = { ...state, temporaryExtractionAvailable: false, contextPreparation: null };
+      break;
+    case "REALTIME_MODEL_CONNECTED":
+      if (state.mode !== "live" || state.provenance.source !== "live_ai") return state;
+      next = { ...state, provenance: { ...state.provenance, realtimeModel: event.model } };
       break;
     case "PROMPT_PRESENTED":
       next = { ...state, phase: "presenting_prompt", answerDraft: null, error: null };
@@ -197,7 +204,7 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
       next = { ...state, activeLookahead: { ...state.activeLookahead, decisionSummary: { ...state.activeLookahead.decisionSummary, text: event.text.slice(0, 4_000) } } };
       break;
     case "DECISION_SUMMARY_CONFIRMED":
-      if (state.phase !== "reviewing_decision_summary" || !state.activeLookahead?.decisionSummary || state.pendingRequest === null) return state;
+      if (state.phase !== "reviewing_decision_summary" || !state.activeLookahead?.decisionSummary) return state;
       next = {
         ...state,
         phase: "queued_decision_summary",
@@ -222,9 +229,17 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
       };
       break;
     }
+    case "DEMO_PROCESSING_STARTED":
+      if (state.mode !== "demo") return state;
+      next = { ...state, phase: "analyzing", processingStage: event.stage, error: null };
+      break;
+    case "DEMO_LOOKAHEAD_PRESENTED":
+      if (state.mode !== "demo" || state.activeLookahead) return state;
+      next = { ...state, phase: "reviewing_decision_summary", activeLookahead: event.active };
+      break;
     case "DEMO_REVISION_APPLIED":
       if (state.mode !== "demo") return state;
-      next = { ...state, revision: state.revision + 1, turns: [...state.turns, event.turn], specification: event.specification, currentPrompt: event.nextPrompt, phase: event.nextPrompt ? "presenting_prompt" : "final_review" };
+      next = { ...state, revision: state.revision + 1, turns: [...state.turns, event.turn], specification: event.specification, questionRoadmap: event.questionRoadmap, currentPrompt: event.nextPrompt, phase: event.nextPrompt ? "presenting_prompt" : "final_review", processingStage: "idle" };
       break;
     case "ENTER_FINAL_REVIEW":
       if (state.pendingRequest || state.activeLookahead) return state;

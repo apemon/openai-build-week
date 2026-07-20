@@ -5,7 +5,7 @@ export function getInvariantErrors(state: SessionState): string[] {
   if ((state.answerDraft !== null) !== (state.phase === "reviewing_answer")) {
     errors.push("Only reviewing_answer may hold an Answer Draft");
   }
-  if (state.phase === "analyzing" && state.pendingRequest === null) {
+  if (state.mode === "live" && state.phase === "analyzing" && state.pendingRequest === null) {
     errors.push("Analyzing requires a pending request");
   }
   if (state.activeLookahead && state.activeLookahead.approval.roadmapItemId !== state.activeLookahead.decisionSummary?.roadmapItemId && state.activeLookahead.decisionSummary) {
@@ -14,7 +14,7 @@ export function getInvariantErrors(state: SessionState): string[] {
   if (state.phase === "queued_decision_summary" && state.activeLookahead?.decisionSummary?.status !== "confirmed_queued") {
     errors.push("A queued Decision Summary must be explicitly confirmed");
   }
-  if (state.processingStage !== "idle" && state.pendingRequest === null) {
+  if (state.mode === "live" && state.processingStage !== "idle" && state.pendingRequest === null) {
     errors.push("Processing progress requires a pending Brain request");
   }
   if (state.mode === "demo" && state.provenance.source !== "prepared_demo") {

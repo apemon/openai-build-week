@@ -14,16 +14,20 @@ import type {
   Specification,
   ConversationTurn,
   ConfirmedProjectContextDigest,
+  ActiveLookahead,
+  QuestionRoadmap,
 } from "./types";
 
 export type SessionEvent =
   | { type: "START_SESSION"; textOnly: boolean }
   | { type: "CONTEXT_PREPARATION_STARTED"; requestId: string }
   | { type: "CONTEXT_PREPARATION_READY"; preparation: ContextPreparation }
+  | { type: "CONTEXT_PREPARATION_FAILED" }
   | { type: "CONTEXT_DIGEST_EDITED"; digest: ProjectContextDigest }
   | { type: "CONTEXT_WARNING_ACKNOWLEDGED"; acknowledged: boolean }
   | { type: "CONTEXT_DIGEST_CONFIRMED"; digest: ConfirmedProjectContextDigest }
   | { type: "TEMPORARY_EXTRACTION_LOST" }
+  | { type: "REALTIME_MODEL_CONNECTED"; model: string }
   | { type: "PROMPT_PRESENTED" }
   | { type: "LISTENING_STARTED" }
   | { type: "SPEECH_STARTED" }
@@ -42,7 +46,9 @@ export type SessionEvent =
   | { type: "DECISION_SUMMARY_EDITED"; text: string }
   | { type: "DECISION_SUMMARY_CONFIRMED"; confirmedAt: string }
   | { type: "LOOKAHEAD_QUARANTINED"; reason: string }
-  | { type: "DEMO_REVISION_APPLIED"; specification: Specification; nextPrompt: InterviewPrompt | null; turn: ConversationTurn }
+  | { type: "DEMO_PROCESSING_STARTED"; stage: ProcessingStage }
+  | { type: "DEMO_LOOKAHEAD_PRESENTED"; active: ActiveLookahead }
+  | { type: "DEMO_REVISION_APPLIED"; specification: Specification; questionRoadmap: QuestionRoadmap; nextPrompt: InterviewPrompt | null; turn: ConversationTurn }
   | { type: "ENTER_FINAL_REVIEW" }
   | { type: "ABANDON_PENDING_AND_ENTER_FINAL_REVIEW"; reason: string }
   | { type: "FINALIZE" }

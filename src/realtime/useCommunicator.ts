@@ -260,6 +260,7 @@ export function useCommunicator({
 
   const presentPrompt = useCallback(
     (promptId: string, spokenQuestion: string): boolean => {
+      microphonePausedForTextInput.current = false;
       activePromptId.current = promptId;
       setAnswerDraft(null);
       setTranscriptPreview("");

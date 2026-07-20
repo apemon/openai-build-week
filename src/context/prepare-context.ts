@@ -69,6 +69,27 @@ export interface ExtractedContextSource {
 
 const DIGEST_TEXT_LIMIT = 4_000;
 const EXCERPT_TEXT_LIMIT = 10_000;
+export const DIGEST_SOURCE_STATEMENT_LIMIT = 8;
+export const DIGEST_SOURCE_STATEMENT_CHARACTER_LIMIT = 750;
+
+function retainedDigestExcerpt(section: ExtractedContextSection): { text: string; omission: string | null } {
+  const normalized = section.text.trim();
+  if (normalized.length <= DIGEST_SOURCE_STATEMENT_CHARACTER_LIMIT) {
+    return { text: normalized, omission: null };
+  }
+  const candidate = normalized.slice(0, DIGEST_SOURCE_STATEMENT_CHARACTER_LIMIT);
+  const sentenceBoundary = Math.max(candidate.lastIndexOf(". "), candidate.lastIndexOf("? "), candidate.lastIndexOf("! "));
+  const wordBoundary = candidate.lastIndexOf(" ");
+  const boundary = sentenceBoundary >= Math.floor(DIGEST_SOURCE_STATEMENT_CHARACTER_LIMIT * 0.5)
+    ? sentenceBoundary + 1
+    : wordBoundary >= Math.floor(DIGEST_SOURCE_STATEMENT_CHARACTER_LIMIT * 0.5)
+      ? wordBoundary
+      : DIGEST_SOURCE_STATEMENT_CHARACTER_LIMIT;
+  return {
+    text: normalized.slice(0, boundary).trim(),
+    omission: `${section.location}: the digest retains only the opening verbatim excerpt; remaining wording is available only in the temporary extraction.`,
+  };
+}
 
 function splitWithoutTruncation(text: string, limit: number): string[] {
   const chunks: string[] = [];
@@ -152,22 +173,27 @@ export function buildContextPreparationResponse(
     statement: input.initialPrompt.trim(),
     sourceReferences: [{ sourceId: initialSource.id, location: "Initial Prompt", page: null, heading: null, paragraph: 1 }],
   }];
-  for (const section of extracted?.sections ?? []) {
+  const digestSections = (extracted?.sections ?? []).slice(0, DIGEST_SOURCE_STATEMENT_LIMIT);
+  const digestOmissions: string[] = [];
+  for (const section of digestSections) {
+    const retained = retainedDigestExcerpt(section);
     statements.push({
       id: `CTX-${String(statements.length + 1).padStart(3, "0")}`,
-      statement: section.text,
+      statement: retained.text,
       sourceReferences: [sourceReference(extracted!.metadata.id, section)],
     });
+    if (retained.omission) digestOmissions.push(retained.omission);
   }
-  if (statements.length > 100) {
-    throw new ContextPreparationError("TOO_MANY_DIGEST_STATEMENTS", "The context contains more than 99 source sections. Combine nearby sections and retry; nothing was silently dropped.");
+  for (const section of (extracted?.sections ?? []).slice(DIGEST_SOURCE_STATEMENT_LIMIT)) {
+    digestOmissions.push(`${section.location}: not retained in the concise digest; available only in the temporary extraction.`);
   }
 
+  const omissions = [...(extracted?.omissions ?? []), ...digestOmissions].slice(0, 100);
   const coverage = {
     coveredLocations: ["Initial Prompt", ...(extracted?.coveredLocations ?? [])].slice(0, 100),
-    omissions: extracted?.omissions ?? [],
+    omissions,
     warnings: extracted?.warnings ?? [],
-    requiresAcknowledgement: Boolean(extracted && (extracted.omissions.length > 0 || extracted.warnings.length > 0)),
+    requiresAcknowledgement: omissions.length > 0 || Boolean(extracted?.warnings.length),
   };
   const digest = projectContextDigestSchema.parse({
     id: safeDigestId(input.requestId),

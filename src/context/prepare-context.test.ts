@@ -4,7 +4,12 @@ import {
   PASTED_CONTEXT_MAX_CHARACTERS,
   validateContextInput,
 } from "./limits";
-import { ContextPreparationError, prepareContextLocally } from "./prepare-context";
+import {
+  ContextPreparationError,
+  DIGEST_SOURCE_STATEMENT_CHARACTER_LIMIT,
+  DIGEST_SOURCE_STATEMENT_LIMIT,
+  prepareContextLocally,
+} from "./prepare-context";
 
 const base = {
   schemaVersion: 1 as const,
@@ -43,5 +48,18 @@ describe("prepareContextLocally", () => {
 
   it("rejects over-limit extraction without silently truncating", async () => {
     await expect(prepareContextLocally({ ...base, pastedContext: "x".repeat(PASTED_CONTEXT_MAX_CHARACTERS + 1) })).rejects.toBeInstanceOf(ContextPreparationError);
+  });
+
+  it("keeps the checkpointable digest concise while retaining the complete temporary extraction", async () => {
+    const sections = Array.from({ length: DIGEST_SOURCE_STATEMENT_LIMIT + 3 }, (_, index) => `## Decision ${index + 1}\n\n${String(index + 1).repeat(DIGEST_SOURCE_STATEMENT_CHARACTER_LIMIT + 200)}`);
+    const source = sections.join("\n\n");
+    const result = await prepareContextLocally({ ...base, pastedContext: source });
+    const retainedSourceStatements = result.digest.statements.slice(1);
+
+    expect(retainedSourceStatements).toHaveLength(DIGEST_SOURCE_STATEMENT_LIMIT);
+    expect(retainedSourceStatements.every((statement) => statement.statement.length <= DIGEST_SOURCE_STATEMENT_CHARACTER_LIMIT)).toBe(true);
+    expect(result.digest.coverage.omissions.length).toBeGreaterThan(0);
+    expect(result.digest.coverage.requiresAcknowledgement).toBe(true);
+    expect(result.temporaryExtraction?.excerpts.map((excerpt) => excerpt.text).join("\n")).toContain(String(DIGEST_SOURCE_STATEMENT_LIMIT + 3).repeat(DIGEST_SOURCE_STATEMENT_CHARACTER_LIMIT + 200));
   });
 });

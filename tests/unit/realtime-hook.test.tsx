@@ -82,4 +82,21 @@ describe("useCommunicator", () => {
     expect(result.current.microphoneState).toBe("off");
     expect(transport.getMicrophoneState()).toBe("off");
   });
+
+  it("clears an earlier text pause when a newly validated prompt is presented", async () => {
+    const transport = new MockCommunicatorTransport({ autoCompletePrompt: false });
+    const { result } = renderHook(() => useCommunicator({ transport }));
+
+    await act(async () => {
+      await result.current.connect(sessionConfig);
+    });
+    act(() => {
+      result.current.pauseForTextInput();
+      result.current.presentPrompt("PROMPT-002", "Which role should approve billing changes?");
+      transport.simulatePromptPlaybackDone("PROMPT-002");
+    });
+
+    expect(result.current.microphoneState).toBe("listening");
+    expect(transport.getMicrophoneState()).toBe("listening");
+  });
 });

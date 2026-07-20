@@ -3,6 +3,28 @@ import { downloadText, expectNoSeriousAxeViolations } from "./helpers";
 
 test("completes the keyboard-driven Prepared Demo and exports labeled Markdown", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  let forbiddenRuntimeRequests = 0;
+  await page.addInitScript(() => {
+    const browser = window as typeof window & { __microphoneRequests?: number };
+    browser.__microphoneRequests = 0;
+    const mediaDevices = navigator.mediaDevices ?? ({} as MediaDevices);
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        ...mediaDevices,
+        getUserMedia: async () => {
+          browser.__microphoneRequests = (browser.__microphoneRequests ?? 0) + 1;
+          throw new Error("Prepared Demo must not request microphone access");
+        },
+      },
+    });
+  });
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.hostname === "api.openai.com" || /\/api\/(brain|realtime|context)(?:\/|$)/.test(url.pathname)) {
+      forbiddenRuntimeRequests += 1;
+    }
+  });
   await page.goto("/");
   await expectNoSeriousAxeViolations(page);
 
@@ -10,11 +32,29 @@ test("completes the keyboard-driven Prepared Demo and exports labeled Markdown",
   await start.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("Prepared demo • no AI call", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: /What do you want to build/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Start with reviewed context" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "team-billing-project-brief.md" })).toBeVisible();
+  await expect(page.getByText(/does not read a user file or make a network, microphone, or AI call/)).toBeVisible();
+  await page.getByRole("button", { name: "Prepare bundled context" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Review Project Context Digest" })).toBeVisible();
+  await expect(page.getByText("Source: team-billing-project-brief.md · Roles")).toBeVisible();
+  await expectNoSeriousAxeViolations(page);
+  await page.getByRole("button", { name: "Confirm prepared digest" }).click();
+  await expect(page.getByRole("heading", { name: /Which workspace roles/ })).toBeVisible();
   await expectNoSeriousAxeViolations(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
-  for (let turn = 0; turn < 8; turn += 1) {
+  await page.getByRole("button", { name: "Use prepared answer" }).click();
+  await expect(page.getByText("One safe lookahead")).toBeVisible();
+  await expect(page.getByText("Non-authoritative")).toBeVisible();
+  await expect(page.getByText("Uncertainty retained")).toBeVisible();
+  await page.getByRole("button", { name: "Confirm and queue pending revalidation" }).click();
+  await expect(page.getByText("Not applied").first()).toBeVisible();
+  await expect(page.getByText(/queued lookahead approval no longer matches/).first()).toBeVisible();
+  await expect(page.getByText("Revision 2")).toBeVisible();
+
+  for (let turn = 0; turn < 6; turn += 1) {
     const next = page.getByRole("button", { name: "Use prepared answer" });
     await next.focus();
     await page.keyboard.press("Enter");
@@ -31,4 +71,6 @@ test("completes the keyboard-driven Prepared Demo and exports labeled Markdown",
   expect(exported.text).toContain("> **DRAFT — this Specification has not been finalized.**");
   expect(exported.text).toContain("## Acceptance Criteria");
   expect(exported.text).not.toContain("We need team billing for our SaaS.");
+  expect(forbiddenRuntimeRequests).toBe(0);
+  expect(await page.evaluate(() => (window as typeof window & { __microphoneRequests?: number }).__microphoneRequests)).toBe(0);
 });

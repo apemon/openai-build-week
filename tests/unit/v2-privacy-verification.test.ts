@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createInitialContextDigest, createInitialState, initialInterviewPrompt } from "@/domain/initial-state";
 import type { SessionState } from "@/domain/types";
-import { CHECKPOINT_KEY, clearCheckpoint, createCheckpoint } from "@/lib/session-checkpoint";
+import { CHECKPOINT_KEY, clearCheckpoint, createCheckpoint, restoreCheckpoint } from "@/lib/session-checkpoint";
 
 const timestamp = "2026-07-20T00:00:00.000Z";
 
@@ -79,6 +79,31 @@ describe("V2 reload and privacy cleanup", () => {
     clearCheckpoint(storage);
     expect(storage.removeItem).toHaveBeenCalledOnce();
     expect(storage.removeItem).toHaveBeenCalledWith(CHECKPOINT_KEY);
+  });
+
+  it("restores a confirmed digest after reload without restoring its temporary extraction", () => {
+    const digest = createInitialContextDigest(new Date(timestamp));
+    const preparingInitialRevision: SessionState = {
+      ...createInitialState("live", new Date(timestamp)),
+      phase: "analyzing",
+      confirmedContextDigest: digest,
+      temporaryExtractionAvailable: true,
+      pendingRequest: { requestId: "REQUEST-INITIALIZE", baseRevision: 0, operation: "initialize", actionId: "ACTION-INITIALIZE" },
+      processingStage: "validating_confirmed_input",
+    };
+    const checkpoint = createCheckpoint(preparingInitialRevision, new Date(timestamp));
+    const storage = {
+      getItem: vi.fn(() => JSON.stringify(checkpoint)),
+      removeItem: vi.fn(),
+    };
+    const restored = restoreCheckpoint(storage, new Date("2026-07-20T00:01:00.000Z"));
+    expect(restored).toMatchObject({
+      phase: "connecting",
+      confirmedContextDigest: digest,
+      temporaryExtractionAvailable: false,
+      pendingRequest: null,
+      processingStage: "idle",
+    });
   });
 });
 

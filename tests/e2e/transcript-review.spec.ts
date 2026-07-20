@@ -26,9 +26,15 @@ test("receives, edits, and confirms a mocked transcription before Brain submissi
 
   await page.goto("/");
   await page.getByRole("button", { name: "Enable microphone" }).click();
-  await expect(page.getByRole("heading", { name: /What do you want to build/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Start with reviewed context" })).toBeVisible();
+  await page.getByRole("textbox", { name: /Initial Prompt/ }).fill("We need team billing for our SaaS.");
+  await page.getByRole("button", { name: "Prepare context" }).click();
+  await page.getByRole("button", { name: "Confirm digest and start interview" }).click();
+  await expect(page.getByRole("heading", { name: /Which workspace roles/ })).toBeVisible();
+  submittedText = "";
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { __realtimeSent?: string[] }).__realtimeSent?.some((event) => event.includes("PROMPT-PERMISSIONS")))).toBe(true);
 
-  await emitRealtime(page, { event_id: "evt-created", type: "response.created", response: { id: "resp-1", metadata: { purpose: "speak_brain_prompt", promptId: "PROMPT-INITIAL" } } });
+  await emitRealtime(page, { event_id: "evt-created", type: "response.created", response: { id: "resp-1", metadata: { purpose: "speak_brain_prompt", promptId: "PROMPT-PERMISSIONS" } } });
   await emitRealtime(page, { event_id: "evt-stopped", type: "output_audio_buffer.stopped", response_id: "resp-1" });
   await emitRealtime(page, { event_id: "evt-speech-start", type: "input_audio_buffer.speech_started", item_id: "item-1", audio_start_ms: 0 });
   await emitRealtime(page, { event_id: "evt-speech-stop", type: "input_audio_buffer.speech_stopped", item_id: "item-1", audio_end_ms: 800 });

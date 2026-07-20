@@ -10,11 +10,11 @@ test("submits one mocked typed Live turn only after explicit confirmation", asyn
 
   await startLiveText(page);
   await createTypedDraft(page, "We need team billing for our SaaS.");
-  expect(calls).toBe(0);
+  expect(calls).toBe(1);
   await expectNoSeriousAxeViolations(page);
 
   await page.getByRole("button", { name: "Send to Brain" }).click();
-  await expect.poll(() => calls).toBe(1);
+  await expect.poll(() => calls).toBe(2);
   await expect(page.getByRole("heading", { name: "Team billing for a SaaS workspace" })).toBeVisible();
-  await expect(page.getByText("Revision 1")).toBeVisible();
+  await expect(page.getByText("Revision 2")).toBeVisible();
 });

@@ -15,7 +15,12 @@ export async function expectNoSeriousAxeViolations(page: Page): Promise<void> {
 export async function startLiveText(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByRole("button", { name: "Continue with text only" }).click();
-  await expect(page.getByRole("heading", { name: /What do you want to build/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Start with reviewed context" })).toBeVisible();
+  await page.getByRole("textbox", { name: /Initial Prompt/ }).fill("We need team billing for our SaaS.");
+  await page.getByRole("button", { name: "Prepare context" }).click();
+  await expect(page.getByRole("heading", { name: "Review Project Context Digest" })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm digest and start interview" }).click();
+  await expect(page.getByRole("heading", { name: /Which workspace roles/ })).toBeVisible();
 }
 
 export async function createTypedDraft(page: Page, text: string): Promise<void> {

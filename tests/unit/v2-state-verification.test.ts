@@ -99,6 +99,32 @@ describe("V2 ordering and authority verification", () => {
     expect(submitted.activeLookahead?.decisionSummary?.status).toBe("submitted");
   });
 
+  it("keeps a revalidated draft reviewable when the main response wins the race, then queues it on explicit confirmation", () => {
+    let state: SessionState = {
+      ...createInitialState("live", new Date(now)),
+      phase: "analyzing",
+      confirmedContextDigest: createInitialContextDigest(new Date(now)),
+      questionRoadmap: roadmap(),
+      pendingRequest: { requestId: "REQUEST-001", baseRevision: 0, operation: "answer", actionId: "ACTION-001" },
+      processingStage: "reviewing_dependencies",
+    };
+    state = sessionReducer(state, { type: "LOOKAHEAD_STARTED", approval: approval() });
+    state = sessionReducer(state, { type: "DECISION_SUMMARY_READY", summary: summary() });
+    state = sessionReducer(state, { type: "BRAIN_RESPONSE_RECEIVED", response: response(roadmap(1)) });
+    expect(state.phase).toBe("reviewing_decision_summary");
+    expect(state.pendingRequest).toBeNull();
+    expect(state.activeLookahead?.decisionSummary?.status).toBe("draft");
+
+    state = sessionReducer(state, { type: "DECISION_SUMMARY_CONFIRMED", confirmedAt: now });
+    expect(state.phase).toBe("queued_decision_summary");
+    expect(state.activeLookahead?.decisionSummary?.status).toBe("confirmed_queued");
+
+    const turn = { id: "TURN-RACE-SUMMARY", promptId: "PROMPT-LOOKAHEAD", type: "confirmed_decision_summary" as const, text: summary().text, createdAt: now };
+    state = sessionReducer(state, { type: "BRAIN_REQUESTED", requestId: "REQUEST-002", actionId: "ACTION-002", operation: "decision_summary", turn });
+    expect(state.pendingRequest).toMatchObject({ operation: "decision_summary", baseRevision: 1 });
+    expect(state.turns).toEqual([turn]);
+  });
+
   it("quarantines stale queued wording as not applied without changing the authoritative revision", () => {
     const revised = sessionReducer(analyzingWithLookahead(), { type: "BRAIN_RESPONSE_RECEIVED", response: response(roadmap(1, false)) });
     expect(revised.revision).toBe(1);
