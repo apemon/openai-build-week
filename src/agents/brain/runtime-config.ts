@@ -1,4 +1,4 @@
-export const DEFAULT_BRAIN_TIMEOUT_MS = 120_000;
+export const DEFAULT_BRAIN_TIMEOUT_MS = 300_000;
 export const MIN_BRAIN_TIMEOUT_MS = 30_000;
 export const MAX_BRAIN_TIMEOUT_MS = 300_000;
 

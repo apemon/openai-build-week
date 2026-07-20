@@ -12,20 +12,20 @@ import {
 } from "@/agents/brain/runtime-config";
 
 describe("background Brain contract verification", () => {
-  it("keeps the 120-second default, bounded override, polling interval, and route duration aligned", () => {
-    expect(DEFAULT_BRAIN_TIMEOUT_MS).toBe(120_000);
+  it("keeps the five-minute per-attempt default, bounded override, polling interval, and explicit route duration visible", () => {
+    expect(DEFAULT_BRAIN_TIMEOUT_MS).toBe(300_000);
     expect(BRAIN_TIMEOUT_MS).toBe(DEFAULT_BRAIN_TIMEOUT_MS);
     expect(MIN_BRAIN_TIMEOUT_MS).toBe(30_000);
     expect(MAX_BRAIN_TIMEOUT_MS).toBe(300_000);
     expect(BRAIN_POLL_INTERVAL_MS).toBeGreaterThan(0);
 
     const route = readFileSync("src/app/api/brain/route.ts", "utf8");
-    expect(route).toContain("export const maxDuration = 300");
+    expect(route).toContain("export const maxDuration = 620");
     expect(route).toContain("OPENAI_BRAIN_TIMEOUT_MS");
     expect(route).toMatch(/runBrain\(parsed\.data,\s*\{[\s\S]*?timeoutMs(?:\s*:|\s*,)/);
 
     const example = readFileSync(".env.example", "utf8");
-    expect(example).toMatch(/^OPENAI_BRAIN_TIMEOUT_MS=120000$/m);
+    expect(example).toMatch(/^OPENAI_BRAIN_TIMEOUT_MS=300000$/m);
   });
 
   it("creates a non-stored background response, polls only active states, and attempts cancellation", () => {

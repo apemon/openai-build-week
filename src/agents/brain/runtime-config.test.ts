@@ -8,7 +8,7 @@ import {
 } from "./runtime-config";
 
 describe("parseBrainTimeoutMs", () => {
-  it("defaults to 120 seconds as a number", () => {
+  it("defaults to five minutes as a number", () => {
     expect(parseBrainTimeoutMs(undefined)).toBe(DEFAULT_BRAIN_TIMEOUT_MS);
     expect(typeof parseBrainTimeoutMs(undefined)).toBe("number");
   });

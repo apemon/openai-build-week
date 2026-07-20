@@ -21,7 +21,7 @@ The runtime model boundary is fixed:
 - Communicator: `gpt-realtime-2.1` over native WebRTC, with semantic VAD configured with `create_response: false`.
 - Transcription: `gpt-4o-transcribe`, producing an editable Answer Draft.
 
-Each Brain attempt creates one background Response, then polls while its provider status is `queued` or `in_progress`. The application timeout defaults to 120 seconds and can be configured with `OPENAI_BRAIN_TIMEOUT_MS` from 30,000 through the 300,000 millisecond cap. A timeout or aborted request preserves the last valid Specification and triggers best-effort cancellation when a provider response ID is available; cancellation failure does not replace the application timeout result or prove that provider execution stopped.
+Each Brain attempt creates one background Response, then polls while its provider status is `queued` or `in_progress`. The application timeout defaults to five minutes per attempt and can be configured with `OPENAI_BRAIN_TIMEOUT_MS` from 30,000 through the 300,000 millisecond cap. One automatic repair may create a second attempt, so the route declares a 620-second execution budget; deployment requires a hosting plan that supports that duration. A timeout or aborted request preserves the last valid Specification and triggers best-effort cancellation when a provider response ID is available; cancellation failure does not replace the application timeout result or prove that provider execution stopped.
 
 The application—not either model—owns approval and state mutation. Only `Send to Brain`, `Ctrl/Cmd+Enter`, or explicit deferral/resume actions call `/api/brain`. Responses must pass schema and semantic validation before atomically replacing the Specification. Invalid, stale, refused, incomplete, timed-out, or provider-error results preserve the last valid revision.
 
@@ -47,7 +47,7 @@ Open [http://localhost:3000](http://localhost:3000). With the example configurat
 |---|---|---|
 | `OPENAI_API_KEY` | Server-only standard project key used by Brain and temporary Realtime credential routes | Empty |
 | `OPENAI_BRAIN_MODEL` | Server-only Brain model override | `gpt-5.6` |
-| `OPENAI_BRAIN_TIMEOUT_MS` | Server-only timeout for each background Brain attempt, constrained to 30,000–300,000 milliseconds | `120000` |
+| `OPENAI_BRAIN_TIMEOUT_MS` | Server-only timeout for each background Brain attempt, constrained to 30,000–300,000 milliseconds | `300000` |
 | `OPENAI_REALTIME_MODEL` | Realtime Communicator model | `gpt-realtime-2.1` |
 | `OPENAI_TRANSCRIPTION_MODEL` | Input transcription model | `gpt-4o-transcribe` |
 | `LIVE_AI_ENABLED` | Server-side Live kill switch | `false` |

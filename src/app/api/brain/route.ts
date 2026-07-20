@@ -10,7 +10,7 @@ import type { ApiError } from "@/domain/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 620;
 
 const MAX_BODY_BYTES = 1_000_000;
 
