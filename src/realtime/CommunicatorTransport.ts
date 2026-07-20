@@ -1,4 +1,5 @@
 import type { LookaheadApproval } from "@/domain/types";
+import type { ExchangeIdentity, QuestionPermit } from "@/domain/v3-schemas";
 
 export type MicrophoneState = "off" | "listening" | "speech_detected" | "transcribing" | "reviewing_answer";
 
@@ -39,4 +40,26 @@ export interface ClarificationCommunicatorTransport extends CommunicatorTranspor
   submitClarificationText(roadmapItemId: string, text: string): void;
   requestDecisionSummary(roadmapItemId: string): void;
   stopClarification(): void;
+}
+
+export type V3CommunicatorEvent =
+  | { type: "speech_started"; itemId: string; identity: ExchangeIdentity; providerEventId: string }
+  | { type: "speech_stopped"; itemId: string; identity: ExchangeIdentity; providerEventId: string }
+  | { type: "transcript_delta"; itemId: string; delta: string; identity: ExchangeIdentity; providerEventId: string }
+  | { type: "transcript_completed"; itemId: string; transcript: string; identity: ExchangeIdentity; providerEventId: string }
+  | { type: "prompt_playback_started"; identity: ExchangeIdentity; providerEventId: string }
+  | { type: "prompt_playback_done"; identity: ExchangeIdentity; providerEventId: string }
+  | { type: "clarification_response_done"; text: string; identity: ExchangeIdentity; providerEventId: string }
+  | { type: "decision_summary_ready"; text: string; uncertainties: string[]; identity: ExchangeIdentity; providerEventId: string };
+
+/** V3 identity-safe capabilities. Only one permit may be active even when a
+ * validated Interview Window contains multiple permits. */
+export interface V3CommunicatorTransport extends CommunicatorTransport {
+  beginPermittedExchange(permit: QuestionPermit, identity: ExchangeIdentity): void;
+  submitPermittedClarification(text: string, identity: ExchangeIdentity): void;
+  requestPermittedDecisionSummary(identity: ExchangeIdentity): void;
+  pauseQuestions(nextCancelEpoch: number): void;
+  resumeQuestions(permit: QuestionPermit, identity: ExchangeIdentity): void;
+  cancelExchange(identity: ExchangeIdentity, nextCancelEpoch: number): void;
+  subscribeV3(listener: (event: V3CommunicatorEvent) => void): () => void;
 }

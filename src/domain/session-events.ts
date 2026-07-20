@@ -17,6 +17,18 @@ import type {
   ActiveLookahead,
   QuestionRoadmap,
 } from "./types";
+import type {
+  BrainLifecycleEvent,
+  DecisionBatch,
+  ExchangeIdentity,
+  InterviewJob,
+  InterviewWindow,
+  NotAppliedReason,
+  QuestionPermit,
+  RestoredAsyncEntry,
+  V3BrainOperation,
+  V3BrainResponse,
+} from "./v3-schemas";
 
 export type SessionEvent =
   | { type: "START_SESSION"; textOnly: boolean }
@@ -59,3 +71,26 @@ export type SessionEvent =
   | { type: "RESET_SESSION" }
   | { type: "RESTORE_CHECKPOINT"; state: import("./types").SessionState }
   | { type: "SET_PHASE"; phase: SessionPhase };
+
+/** Frozen V3 reducer boundary. These events are consumed by the V3 reducer
+ * extension only after V3.0; V1/V2 events remain available during migration. */
+export type V3SessionEvent =
+  | { type: "V3_BRAIN_ACTION_ACCEPTED"; requestId: string; actionId: string; operation: V3BrainOperation; cancelEpoch: number; acceptedAt: string }
+  | { type: "V3_BRAIN_LIFECYCLE_RECEIVED"; event: BrainLifecycleEvent }
+  | { type: "V3_BRAIN_STREAM_INTERRUPTED"; requestId: string; actionId: string; cancelEpoch: number; observedAt: string }
+  | { type: "V3_BRAIN_TIMED_OUT"; requestId: string; actionId: string; cancelEpoch: number; observedAt: string }
+  | { type: "V3_BRAIN_RESPONSE_RECEIVED"; response: V3BrainResponse }
+  | { type: "V3_INTERVIEW_WINDOW_AVAILABLE"; window: InterviewWindow }
+  | { type: "V3_PERMIT_PRESENTED"; permit: QuestionPermit; identity: ExchangeIdentity; job: InterviewJob }
+  | { type: "V3_JOB_UPDATED"; job: InterviewJob }
+  | { type: "V3_JOB_CONFIRMED"; jobId: string; confirmedAt: string }
+  | { type: "V3_JOB_CONFIRMATION_UNDONE"; jobId: string }
+  | { type: "V3_JOB_REVALIDATION_PENDING"; jobId: string }
+  | { type: "V3_JOB_NOT_APPLIED"; jobId: string; reason: NotAppliedReason; explanation: string }
+  | { type: "V3_QUESTIONS_PAUSED"; nextCancelEpoch: number }
+  | { type: "V3_QUESTIONS_RESUMED"; permit: QuestionPermit; identity: ExchangeIdentity }
+  | { type: "V3_DECISION_BATCH_LOCKED"; batch: DecisionBatch }
+  | { type: "V3_DECISION_BATCH_RETRY_REQUESTED"; batchId: string; requestId: string; actionId: string; cancelEpoch: number }
+  | { type: "V3_RESTORED_ENTRIES_LOADED"; entries: RestoredAsyncEntry[] }
+  | { type: "V3_RESTORED_REVALIDATION_REQUESTED"; requestId: string; actionId: string; cancelEpoch: number }
+  | { type: "V3_RESTORED_SUBMISSION_REQUESTED"; batch: DecisionBatch };
