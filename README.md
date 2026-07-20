@@ -2,9 +2,7 @@
 
 Spec Grill is a solo Product Manager requirements interview room. It turns a vague spoken or typed request into a traceable Specification by asking one consequential decision question at a time.
 
-V1 and V2 are implemented. V2 adds reviewed project context and a latency-resilient, Brain-approved lookahead flow without weakening confirmation, provenance, or Live/Prepared separation. See [V2_IMPLEMENTATION_HANDOFF.md](./V2_IMPLEMENTATION_HANDOFF.md) for the delivered scope and acceptance criteria.
-
-V3 is approved but not yet implemented. It adds bounded Interview Windows of up to three pairwise-independent Question Permits, a persistent truthful Brain activity strip, atomic revalidated Decision Batches, and disabled-by-default local Brain-harness experiments. See [V3_IMPLEMENTATION_HANDOFF.md](./V3_IMPLEMENTATION_HANDOFF.md) for the authoritative implementation plan; current runtime behavior remains V2 until that work is delivered.
+V1, V2, and the approved V3 extension are implemented. V3 adds Brain-issued Interview Windows of up to three pairwise-independent Question Permits while keeping exactly one active question, Persistent Brain Status from content-free lifecycle events, revision-first revalidation, atomic Decision Batches, bounded confirmed-queue recovery, and disabled-by-default experimental Brain harnesses. See [V3_IMPLEMENTATION_HANDOFF.md](./V3_IMPLEMENTATION_HANDOFF.md) for the settled scope and acceptance criteria.
 
 The MVP has two deliberately separate modes:
 
@@ -25,11 +23,13 @@ The runtime model boundary is fixed:
 
 Each Brain attempt creates one background Response, then polls while its provider status is `queued` or `in_progress`. The application timeout defaults to five minutes per attempt and can be configured with `OPENAI_BRAIN_TIMEOUT_MS` from 30,000 through the 300,000 millisecond cap. One automatic repair may create a second attempt, so the route declares a 620-second execution budget; deployment requires a hosting plan that supports that duration. A timeout or aborted request preserves the last valid Specification and triggers best-effort cancellation when a provider response ID is available; cancellation failure does not replace the application timeout result or prove that provider execution stopped.
 
-The application—not either model—owns approval and state mutation. Only `Send to Brain`, `Ctrl/Cmd+Enter`, or explicit deferral/resume actions call `/api/brain`. Responses must pass schema and semantic validation before atomically replacing the Specification. Invalid, stale, refused, incomplete, timed-out, or provider-error results preserve the last valid revision.
+The application—not either model—owns approval and state mutation. Direct answers, corrections, and deferrals require explicit Product Manager confirmation. V3 may automatically submit only an exact locked Decision Batch whose one to three entries were individually confirmed and freshly Brain-revalidated. Responses must pass schema and semantic validation before atomically replacing the Specification. Invalid, stale, refused, incomplete, timed-out, interrupted, or provider-error results preserve the last valid revision.
 
 Before an interview starts, the Product Manager supplies an Initial Prompt and may add pasted Markdown/plain text or one `.md`, `.txt`, `.pdf`, or `.docx` file. The app validates the agreed size, page, and character limits; prepares an editable source-linked Project Context Digest; exposes known coverage gaps; and requires explicit confirmation. Partial extraction additionally requires acknowledgement. The checkpointable digest retains at most eight verbatim, source-linked context statements of at most 750 characters each; unretained source wording remains only in the active tab’s temporary extraction.
 
-The Brain also maintains the validated Question Roadmap. While a Brain revision is in flight, the Communicator may clarify exactly one previously approved dependency-independent Lookahead Question and create a non-authoritative Decision Summary. Confirmed summary wording remains queued until the authoritative revision applies and dependency revalidation succeeds. Stale wording is preserved visibly as `not applied` and never reaches the Brain or Specification.
+The Brain also maintains the validated Question Roadmap and may issue zero to three pairwise-independent Question Permits. The Communicator presents and clarifies only one permit at a time and creates an editable, non-authoritative Decision Summary. Confirmed wording waits in the Decision Tray. The complete authoritative revision applies first; the Brain then reissues or dependency-invalidates every prior permit, and only valid confirmed work enters one ordered atomic Decision Batch. Stale wording remains visibly Not Applied and never enters the Specification.
+
+`POST /api/brain` returns validated NDJSON. Content-free lifecycle envelopes are bound to request, action, base revision, cancellation epoch, attempt, and monotonic sequence; they contain no prompt, answer, transcript, Specification, provider ID, credential, or raw error text. One terminal result or error closes the stream. Malformed, content-bearing, mismatched, duplicate, late, or interrupted streams fail closed and require explicit retry.
 
 ## Local setup
 
@@ -53,6 +53,9 @@ Open [http://localhost:3000](http://localhost:3000). With the example configurat
 | `OPENAI_REALTIME_MODEL` | Realtime Communicator model | `gpt-realtime-2.1` |
 | `OPENAI_TRANSCRIPTION_MODEL` | Input transcription model | `gpt-4o-transcribe` |
 | `LIVE_AI_ENABLED` | Server-side Live kill switch | `false` |
+| `OPENAI_BRAIN_HARNESS` | Server-only Brain adapter selector | `one_shot` |
+| `BRAIN_EXPERIMENTAL_HARNESSES_ENABLED` | Enables local experimental adapters; never a public UI control | `false` |
+| `BRAIN_PUBLIC_SEARCH_ENABLED` | Separately authorizes the local controlled-search experiment | `false` |
 | `BRAIN_DEBUG_LOGS` | Server-only, content-free Brain submission and provider lifecycle trace | `false` |
 | `ALLOWED_ORIGIN` | Exact browser origin accepted by guarded routes | `http://localhost:3000` |
 
@@ -75,23 +78,25 @@ npm run build
 
 The normal test suite uses mocked provider boundaries and requires neither an OpenAI key nor physical audio. The intentionally small Playwright suite verifies:
 
-1. keyboard-driven V2 Prepared Demo preparation, Lookahead clarification, stale-summary quarantine, 390 px layout, and downloaded Markdown;
+1. keyboard-driven V3 Prepared Demo preparation, two sequential permitted decisions, revision-first revalidation, one Applied/one Not Applied outcome, 390 px layout, and downloaded Markdown;
 2. Project Context Digest confirmation, partial-extraction acknowledgement, source provenance, and reload/privacy cleanup;
 3. one typed Live turn that cannot reach the mocked Brain before explicit confirmation or submit twice;
 4. one-Lookahead clarification-to-summary behavior, dependency revalidation, and stale-work isolation;
 5. receipt, editing, and confirmation of a fake-media transcription;
 6. preservation of the last valid Specification after invalid Brain output; and
-7. explicit deferral, finalization with follow-ups, stateless resume, and final export.
+7. explicit deferral, finalization with follow-ups, stateless resume, and final export;
+8. Persistent Brain Status and Decision Tray behavior across the prepared async sequence; and
+9. reload recovery that makes no automatic request and requires separate `Revalidate restored decisions` and `Submit restored decisions` actions.
 
-Axe scans cover Start, context review, Interview, Answer Draft, Lookahead, and Final Review states for critical/serious violations. Unit and integration coverage includes context/file limits, partial extraction, schemas, Brain semantics and route failures, provenance, safe provider-trace allowlisting and sentinel exclusion, Realtime event ordering/session locks, duplicate-action protection, reducer ordering and stale responses, checkpoint sanitization/expiry, visual aids, prepared snapshots, and Markdown export.
+Axe scans cover Start, context review, Interview, Answer Draft, permitted-question/Decision Tray, Persistent Brain Status, and Final Review states for critical/serious violations. Unit and integration coverage includes lifecycle split/coalesced parsing and privacy sentinels, batch ordering/atomicity, revision barriers, checkpoint sanitization/migration, adaptive caps, Realtime identity races, 24 synthetic evaluation fixtures, safe harness defaults, V1/V2 regressions, visual aids, prepared snapshots, and Markdown export.
 
 Normal CI must not call OpenAI or depend on microphone hardware. Live smoke testing is opt-in and should be run only with the dedicated project explicitly enabled.
 
 ## Prepared Demo walkthrough
 
-Choose `Run prepared demo`, prepare the bundled `team-billing-project-brief.md`, review its prevalidated Project Context Digest, and select `Confirm prepared digest`. The first revision starts automatically. The permissions step opens one safe billing-basis Lookahead Question with a prepared clarification exchange and editable Decision Summary; confirmation demonstrates deterministic dependency revalidation and preserves the summary as `not applied`. Continue with the remaining prepared answers through seat changes, failed payment, provider choice, measurable success, and tax. The final state is `ready_with_follow_ups` and keeps Finance registration and retention review visible as Next Actions.
+Choose `Run prepared demo`, prepare the bundled `team-billing-project-brief.md`, review its prevalidated Project Context Digest, and select `Confirm prepared digest`. Submit the prepared answer to start the user-paced fixture clock. The demo opens a two-permit Interview Window, presents each permitted decision sequentially, shows its clarification exchange and editable Decision Summary, and requires individual confirmation. It then advances beyond 30 fixture seconds without a real wait, applies the authoritative revision first, revalidates both jobs, keeps one Ready to Apply, marks the other dependency-invalidated Not Applied with `Reuse wording`, automatically applies the one-entry prepared Decision Batch, and enters Final Review.
 
-The walkthrough makes no `/api/brain`, `/api/realtime`, `/api/context`, OpenAI, microphone, or user-file request. Browser verification asserts those boundaries directly.
+The walkthrough makes no `/api/brain`, `/api/realtime`, `/api/context`, OpenAI, Codex, public-search, microphone, or user-file request. Browser verification asserts those boundaries directly.
 
 The demo uses the same production schemas and Specification rendering path as Live Mode, but not the Live Brain endpoint. Its locally bundled prompt MP3s were generated from each fixture's exact `spokenQuestion` with `gpt-4o-mini-tts` and `marin`; container, duration, and non-silence checks pass. Regenerate them with a dedicated project key when prompts change:
 
@@ -100,6 +105,12 @@ OPENAI_API_KEY=<configured-locally> npm run generate:demo-audio
 ```
 
 Do not put the key in the command history on a shared machine; configure it in `.env.local` instead. Manually listen to all eight generated files before presentation to confirm spoken-word delivery. If approved audio cannot play, the walkthrough continues silently.
+
+## Experimental Brain evaluation
+
+Ordinary Live Mode is fixed to `one_shot`. `responses_native` and `codex_ephemeral` require the server-only experimental flag and run only through the local evaluation surface with explicitly experimental provenance; the ordinary Live route rejects both. The local Codex runner uses a fresh empty temporary directory, ephemeral/read-only execution, a strict environment allowlist, no repository or project instructions, and validated structured output. Public search remains disabled because the current runner cannot enforce the required five-query/five-source caps; the implementation rejects enabling it instead of weakening isolation.
+
+The frozen bake-off contains 24 synthetic, non-sensitive sessions and reproducible rubric/gate code. Generated candidate output belongs only in the gitignored `.brain-evaluation-artifacts/` directory. No live bake-off, human scoring, adapter promotion, or provider-retention conclusion is included in the automated delivery.
 
 ## Deploy to Vercel
 
@@ -129,7 +140,7 @@ Run this manually in current desktop Chrome on the actual presentation hardware.
 
 ## Privacy and persistence
 
-Spec Grill does not persist raw audio, original uploads, full extractions, or Interview Session content on its servers. Confirmed revisions and the bounded confirmed digest may be stored temporarily in the current tab's `sessionStorage` and expire after 30 minutes. Original file bytes are discarded after the preparation request; temporary source extraction remains only in the active tab and is lost on reload. Unconfirmed drafts, clarification content, queued/stale summaries, provider events, client secrets, and raw audio are excluded from checkpoints. Explicit exit/reset and expiry clear app-held checkpoint state.
+Spec Grill does not persist raw audio, original uploads, full extractions, or Interview Session content on its servers. Confirmed revisions, the bounded confirmed digest, and at most three individually confirmed queued Decision Summaries/deferrals may be stored temporarily in the current tab's `sessionStorage` and expire after 30 minutes. Original file bytes are discarded after preparation; temporary source extraction remains only in the active tab and is lost on reload. Drafts, clarification turns, transcripts, lifecycle/provider state, Not Applied history, client secrets, raw audio, and search content are excluded. Restored decisions never auto-submit: revalidation and submission are two explicit actions. Explicit exit/reset and expiry clear app-held checkpoint state.
 
 After reload, an interview may continue from the confirmed digest. Deep source lookup requires re-uploading the original file.
 
@@ -139,11 +150,11 @@ Live input is processed by OpenAI under the configured project's data controls. 
 
 The implementation was built as four bounded Codex workstreams coordinated by a root integrator:
 
-- **Root integration:** shared V2 contracts, reducer ordering, duplicate-action guards, dependency revalidation, Final Review abandonment, checkpoint sanitization, Live/Demo isolation, and the application orchestrator.
-- **Brain API:** validated digest/excerpt consumption, GPT-5.6 Question Roadmap and Lookahead approval output, provenance, semantic validation, repair retry, request hardening, typed failures, and mocked route coverage.
-- **Realtime voice:** native WebRTC one-topic clarification, non-authoritative Decision Summary generation, locked semantic-VAD session, transcription reconciliation, microphone gating, out-of-band prompt speech, and text fallback.
-- **Experience/demo:** accessible context intake/review, extraction limits and failures, progress/Lookahead/stale-work UI, bounded digest preparation, deterministic V2 fixtures, Visual Aids, local audio, Final Review, and browser-generated Markdown.
-- **Verification/docs:** independent context/reducer/privacy verification, mocked V2 Playwright flows, Prepared network/microphone isolation, fake-media transcript boundary, axe/390 px checks, deployment/manual voice guidance, and the demo storyboard.
+- **Root integration:** frozen V3 contracts, single-request/revision ordering, queue and batch orchestration, adaptive caps, explicit reload gates, checkpoint sanitization, and Live/Prepared isolation.
+- **Brain API:** streamed content-free lifecycle delivery, Interview Window and exact disposition validation, GPT-5.6 one-shot and responses-native adapters, local Codex evaluation isolation, evaluation fixtures/gates, repair, and typed failures.
+- **Realtime voice:** exchange/permit/cancellation identity, bounded provider-event deduplication, mid-turn revalidation safety, sequential permitted clarification, microphone gating, and text fallback.
+- **Experience/demo:** Persistent Brain Status, Decision Tray, one-active-question presentation, External Evidence rendering/export, two-permit Prepared fixtures, Visual Aids, local audio, Final Review, and browser-generated Markdown.
+- **Verification/docs:** independent NDJSON privacy, batch atomicity, checkpoint/reload, harness-default, axe/390 px, Prepared isolation, V1/V2 regression, and browser verification plus this documentation.
 
 The contribution record describes repository work, not runtime model output. Prepared Demo snapshots are fixtures. Automated verification uses mocked provider boundaries; live GPT-5.6, physical microphone, deployment, and provider-retention verification are not claimed here.
 

@@ -1,6 +1,6 @@
 # Implementation ownership
 
-Shared V1/V2 contracts in `src/domain/**` and `src/realtime/CommunicatorTransport.ts` are frozen and owned by the root integrator. V3 implementation begins with a coordinated extension freeze for Interview Windows, Question Permits, Interview Jobs, Decision Batches, Brain Lifecycle Events, Persistent Brain Status, External Evidence, exchange/permit/cancellation identities, and checkpoint migration. Contract changes require root coordination.
+Shared V1/V2/V3 contracts in `src/domain/**` and `src/realtime/CommunicatorTransport.ts` are frozen and owned by the root integrator. The delivered extension includes Interview Windows, Question Permits, Interview Jobs, Decision Batches, Brain Lifecycle Events, Persistent Brain Status, External Evidence, exchange/permit/cancellation identities, and checkpoint migration. Contract changes require root coordination.
 
 - `brain-api`: `src/agents/brain/**`, `src/app/api/brain/**`, Brain-specific tests and fixtures, streamed lifecycle emission, Interview Window/Decision Batch validation, experimental adapters, search evidence validation, and harness evaluation runners. It consumes but does not edit the frozen shared contracts.
 - `realtime-voice`: `src/realtime/**` except `CommunicatorTransport.ts`, `src/agents/communicator/**`, `src/app/api/realtime/**`, Realtime-specific tests and fixtures, event identity/deduplication, and mid-turn revalidation behavior. It consumes but does not edit the frozen shared contracts.

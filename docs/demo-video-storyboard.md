@@ -1,73 +1,69 @@
-# Spec Grill — three-minute V2 demo storyboard
+# Spec Grill — three-minute V3 demo storyboard
 
-Target length: 3:00. Capture at 1280×720 or larger in current desktop Chrome. Use non-confidential test content. Keep the `Prepared demo • no AI call` and `Live AI` provenance labels visible whenever their modes are shown.
+Target length: 3:00. Capture at 1280×720 or larger in current desktop Chrome using non-confidential content. Keep Live, Prepared, and any local experimental provenance visible and distinct.
 
-## 0:00–0:18 — The problem and the authority boundary
+## 0:00–0:20 — Product and authority boundary
 
-**Picture:** Start screen, then a close view of the two mode cards.
+**Picture:** Start screen and the two mode choices.
 
-**Narration:** “Spec Grill turns vague product intent into a traceable Specification one consequential decision at a time. Live Mode uses genuine AI calls. Prepared Demo is deterministic, needs no key, network, user file, or microphone, and is never presented as live output.”
+**Narration:** “Spec Grill turns vague product intent into a traceable Specification one consequential decision at a time. The Brain alone owns the Specification, roadmap, dependencies, and Interview Window. Prepared Demo is deterministic and never presented as Live AI.”
 
-**Evidence to show:** privacy notice, configured/disabled Live state as applicable, `Live AI`, and `Prepared demo • no AI call`.
+**Show:** privacy notice, Live configuration state, `Live AI`, and `Prepared demo • no AI call`.
 
-## 0:18–0:55 — Reviewed rich context
+## 0:20–0:42 — Reviewed project context
 
-**Picture:** Start Prepared Demo. Show the bundled `team-billing-project-brief.md`, activate `Prepare bundled context`, then pause on the editable Project Context Digest and its source references before confirmation.
+**Picture:** Prepare bundled `team-billing-project-brief.md`, review statement-level sources, and confirm the digest.
 
-**Narration:** “V2 begins with an Initial Prompt and one optional pasted or uploaded source. Supported files and product limits are validated before interview start. Only explicitly confirmed digest wording becomes Confirmed Input. The bounded digest keeps stable source references; original bytes and the full extraction never enter the reload checkpoint.”
+**Narration:** “Only Product Manager-confirmed digest wording becomes Confirmed Input. Original bytes and full extraction stay outside the reload checkpoint.”
 
-**Evidence to show:** bundled-source notice, preparation stages without a fake percentage, editable digest statements, filename/location provenance, coverage, and `Confirm prepared digest`.
+**Show:** source references, coverage, warnings, and explicit confirmation.
 
-**Optional cutaway:** Use the verified partial-PDF fixture to show an exact missing-page warning and the acknowledgement gate. Do not imply that the prepared sample itself is partially extracted.
+## 0:42–1:35 — Bounded Async Interview
 
-## 0:55–1:34 — One safe Lookahead and stale-work quarantine
+**Picture:** Submit the prepared answer. Show sticky Prepared Brain Status, then the two-permit window. Confirm the first editable summary; show the second detailed question only after promotion and confirm it separately.
 
-**Picture:** Confirm the prepared digest, advance permissions, and show the single billing-basis Lookahead panel during prepared processing. Pause on its clarification exchange and non-authoritative Decision Summary. Confirm it, then show `not applied` with the stale reason.
+**Narration:** “The Brain may approve up to three pairwise-independent permits, but the Communicator presents one decision at a time. Clarification stays within that permit. Every Decision Summary is editable and non-authoritative until individually confirmed.”
 
-**Narration:** “The Brain alone maintains the Question Roadmap and may approve at most one dependency-independent Lookahead Question. The Communicator can clarify only that topic and creates an editable, non-authoritative Decision Summary. Confirmation queues the wording; the authoritative revision applies first, then dependency revalidation decides whether it may reach the Brain. This prepared branch intentionally becomes stale, so it is preserved for reuse but never changes the Specification.”
+**Show:** one active prompt, one future topic label, visible clarification exchange, `Confirm decision and continue`, Decision Tray states, and no competing second prompt.
 
-**Evidence to show:** `One safe lookahead`, Brain-approved revision, roadmap item identity, uncertainty retained, `Confirm and queue pending revalidation`, one visible Lookahead only, `not applied`, stale reason, and unchanged authoritative revision.
+## 1:35–2:05 — Truthful status and revision barrier
 
-## 1:34–2:02 — Live confirmation and meaningful GPT-5.6 use
+**Picture:** Advance the fixture clock to `Taking longer than usual`. Then show the authoritative revision apply before job revalidation.
 
-**Picture:** On a properly configured local environment, prepare and confirm a small non-confidential digest, type an answer, select `Review answer`, edit the Answer Draft, and select `Send to Brain`. Show honest processing or one genuinely approved Lookahead, followed by the validated revision.
+**Narration:** “Persistent status comes only from content-free lifecycle evidence—never percentages or invented stages. The complete authoritative revision always applies first. One prepared decision remains valid; the other becomes dependency-invalidated Not Applied with reusable wording.”
 
-**Narration:** “Text and voice share the same approval gate. Raw extraction, speech, transcripts, clarification content, and unconfirmed summaries cannot reach the Brain. Explicit confirmation sends the bounded confirmed state to server-side GPT-5.6 with medium reasoning, Structured Outputs, and `store: false`. Schema and semantic checks must pass before the browser atomically replaces the revision.”
+**Show:** elapsed/last-verified values, `Revision applied`, `Ready to apply`, `Not Applied`, Brain-owned reason, and `Reuse wording`.
 
-**Evidence to show:** digest confirmation, `Not yet confirmed`, edited draft, immediate disabled/submitting feedback, Live provenance, revision, item provenance, and one next prompt.
+## 2:05–2:27 — Atomic batch and reload privacy
 
-**Capture rule:** Show this as live GPT-5.6 only if an actual opt-in Live run was completed. Otherwise use the mocked-browser evidence and explicitly label it mocked; never substitute Prepared data or claim live output.
+**Picture:** Show automatic one-entry prepared batch application. Cut to the mocked reload fixture: no automatic request, then `Revalidate restored decisions`, then the separate `Submit restored decisions` action.
 
-## 2:02–2:25 — Controlled voice and Final Review abandonment
+**Narration:** “Individual confirmation authorizes an exact entry only after fresh revalidation. The ordered batch applies atomically. Reload restores at most three confirmed entries, never drafts, transcripts, lifecycle state, or automatic submission.”
 
-**Picture:** If physically verified, play one concise Communicator prompt, use `Answer now`, speak, and edit the transcription. Then show the pending-work Final Review gate, its acknowledgement, and a late response being ignored.
+**Show:** Applying → Applied, unchanged last valid Specification during work, and both explicit reload gates.
 
-**Narration:** “Realtime uses semantic VAD with `create_response` false, so the voice model cannot call the Brain autonomously. Final Review never silently accepts pending work: abandonment is explicit, pending summary wording becomes not applied, and late responses are stale.”
+## 2:27–2:45 — Final Review and export
 
-**Fallback:** If physical voice verification is incomplete, show the passing fake-media transcript test and say that presentation-device microphone behavior remains unverified.
+**Picture:** Final Review and downloaded Markdown.
 
-## 2:25–2:45 — Reload privacy and export
+**Narration:** “Decision Tray drafts and Not Applied wording stay out of the authoritative export. Applied work appears only through the validated Specification and provenance.”
 
-**Picture:** Reload the partial-context browser fixture, show the restored digest-driven interview, then open Final Review and download Markdown. Briefly show `Exit and clear session` removing the checkpoint.
+**Show:** `ready_with_follow_ups`, Next Actions, Prepared warning, IDs/status/source references, and absence of Decision Tray wording.
 
-**Narration:** “Reload restores only the confirmed digest, its provenance and warnings, and validated revisions. Temporary extraction is gone, so deep lookup requires re-upload. Export is generated locally with provenance, IDs, statuses, and sources—but no raw conversation or audio.”
+## 2:45–3:00 — Verification and honest limits
 
-**Evidence to show:** restored filename/warning, no full-extraction marker in checkpoint evidence, Markdown provenance and Next Actions, explicit clear confirmation, and return to Start.
+**Picture:** Passing lint, typecheck, unit/integration, Playwright, and build output; finish on Prepared Final Review.
 
-## 2:45–3:00 — Verification and close
-
-**Picture:** Terminal montage of the passing lint, typecheck, unit/integration, Playwright, leaked-secret scan, and production build commands, ending on Prepared Demo Final Review.
-
-**Narration:** “Codex delivered V2 through bounded contracts, Brain, Realtime, experience, integration, and verification workstreams. Automated tests use mocked providers and fake media. Live API, physical microphone, deployment, and provider retention are reported separately and never inferred.”
+**Narration:** “Codex implemented V3 across frozen contracts, Brain streaming, Realtime identity safety, the accessible Prepared experience, and independent verification. Automated checks use mocks, fake media, and 24 synthetic evaluation fixtures. Live OpenAI, physical microphone, deployment streaming duration, and provider retention remain separately unverified.”
 
 ## Capture checklist
 
-- [ ] Remove notifications, unrelated tabs, keys, project identifiers, request payloads, unintended transcripts, and confidential data.
-- [ ] Use large cursor/highlight settings and keep important UI text readable at final video resolution.
-- [ ] Confirm Prepared and Live provenance is visible and accurate in every shot.
-- [ ] Confirm the Prepared walkthrough makes no Brain, Realtime, context API, OpenAI, microphone, or user-file request.
-- [ ] Listen to all eight generated MP3s and confirm the spoken words match the prepared prompts before demonstrating audio.
-- [ ] Record actual Live output only after the opt-in smoke passes with a dedicated capped project.
-- [ ] Record physical voice only after the presentation-device checklist passes.
-- [ ] Do not claim deployment, provider-retention verification, or Zero Data Retention unless each was genuinely verified.
-- [ ] Keep final runtime under 3:00 and leave at least two seconds on the closing Final Review frame.
+- [ ] Remove notifications, unrelated tabs, secrets, project identifiers, raw payloads, and unintended transcripts.
+- [ ] Keep `Prepared demo • no AI call` visible throughout the deterministic walkthrough.
+- [ ] Confirm the Prepared flow makes no Brain, Realtime, context, OpenAI, Codex, public-search, microphone, or user-file request.
+- [ ] Show only one detailed/spoken permitted question at a time.
+- [ ] Use the user-paced fixture clock; do not wait a real 30 seconds or imply provider execution.
+- [ ] Capture Live output only after the opt-in smoke genuinely passes with a dedicated capped project.
+- [ ] Capture physical voice only after [v3-manual-verification.md](./v3-manual-verification.md) is completed on the presentation device.
+- [ ] Do not claim deployment, target-host streaming duration, provider-retention verification, Zero Data Retention, harness promotion, public-search behavior, or human bake-off results unless each was actually verified.
+- [ ] Keep final runtime under 3:00 and leave at least two seconds on the closing frame.

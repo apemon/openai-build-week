@@ -1,15 +1,18 @@
 # Changelog
 
-## V3 approved plan — not yet implemented
+## V3 delivered extension
 
-- Approved Bounded Async Interview Windows containing zero to three pairwise-independent Brain-issued Question Permits while preserving exactly one active visible/spoken question and one authoritative Brain request.
-- Approved revision-first revalidation, automatic atomic Decision Batches, adaptive window shrinking/re-expansion, truthful Not Applied outcomes, correction priority, pause/deferral/undo behavior, and mid-turn speech/edit preservation.
-- Approved Persistent Brain Status with content-free streamed lifecycle events, immediate activity feedback, a 30-second taking-longer threshold, a 10-second unverifiable-activity threshold, explicit retry after stream interruption, reduced-motion behavior, and non-chatty announcements.
-- Approved a bounded checkpoint expansion for at most three individually confirmed queued entries; reload always requires fresh dependency revalidation and never auto-submits.
-- Approved disabled-by-default `one_shot`, `responses_native`, and local `codex_ephemeral` Brain harness modes plus a separately controlled public-search experiment, visible External Evidence, and reproducible frozen evaluation gates.
-- Approved a deterministic V3 Prepared Demo with a user-paced fixture clock, two permits, one valid asynchronous result, one dependency-invalidated Not Applied result, atomic batch application, and no OpenAI/Codex/search/microphone/network dependency.
+- Added Bounded Async Interview Windows with zero to three Brain-issued pairwise-independent permits while preserving one active question and one authoritative Brain request.
+- Added revision-first permit dispositions, individually confirmed Decision Tray jobs, ordered atomic Decision Batches, adaptive cap shrinking/re-expansion, truthful Not Applied outcomes, and request-local provisional turns.
+- Replaced the terminal Brain JSON body with strict NDJSON lifecycle/result/error streaming and Persistent Brain Status, including 30-second taking-longer, 10-second unverifiable-activity, interrupted-stream, explicit-retry, and reduced-motion behavior.
+- Expanded checkpoints to at most three confirmed queued entries plus the content-free adaptive tuple. Reload never auto-submits and exposes separate revalidation and submission gates.
+- Added exchange/permit/cancellation identity enforcement, bounded provider-event deduplication, and mid-turn revalidation protection for Realtime work.
+- Added External Evidence contracts/rendering/export plus disabled-by-default `one_shot`, `responses_native`, and local `codex_ephemeral` evaluation surfaces. Ordinary Live is fixed to `one_shot`; public search remains rejected because enforceable query/source caps are unavailable.
+- Added 24 synthetic evaluation fixtures, frozen rubrics/gates, gitignored artifact output, and secret/content sentinels. No live bake-off, human scoring, or adapter promotion was performed.
+- Extended Prepared Demo with a two-permit user-paced fixture clock, two sequential individual confirmations, revision-first revalidation, one dependency-invalidated Not Applied outcome, one automatic one-entry batch, and no OpenAI/Codex/search/microphone/user-file/API dependency.
+- Added independent NDJSON privacy, batch atomicity, checkpoint/reload, 390 px, axe, Prepared isolation, and V1/V2 regression verification.
 
-The complete settled requirements and implementation sequence are in `V3_IMPLEMENTATION_HANDOFF.md`. None of the V3 behavior above is claimed as delivered yet.
+Live OpenAI, physical microphone, deployment/target-host streaming duration, provider retention, and public-search behavior remain manually unverified.
 
 ## V2 delivered extension
 
