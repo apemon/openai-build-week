@@ -1,15 +1,16 @@
 # Changelog
 
-## V2 approved requirement — not yet implemented
+## V2 delivered extension
 
-- Add a reviewed Project Context Digest from a large Markdown/plain-text editor or one `.md`, `.txt`, `.pdf`, or `.docx` file before the interview starts.
-- Treat only PM-confirmed digest statements as Confirmed Input, with source provenance and explicit extraction coverage warnings.
-- Have the Brain maintain an internal prioritized Question Roadmap with dependencies and approve no more than one independent Lookahead Question during an in-flight Brain revision.
-- Allow the Communicator to clarify that one decision naturally and produce an editable, non-authoritative Decision Summary.
-- Queue a PM-confirmed Decision Summary until the authoritative Brain revision applies and dependency revalidation succeeds; quarantine stale work as `not applied`.
-- Show truthful topical and processing-stage progress when no safe lookahead exists.
-- Keep original uploads, full extractions, durable provider file objects, multiple-file workflows, databases, and persistent document search out of scope.
-- Extend Prepared Demo to prove context preparation, lookahead, summary confirmation, progress, and staleness without OpenAI, microphone, or user-file dependencies.
+- Added reviewed Project Context Digest intake from Markdown/plain text or one `.md`, `.txt`, `.pdf`, or `.docx` file, with the approved size/page/character limits and actionable invalid, empty, encrypted, corrupt, and over-limit failures.
+- Only PM-confirmed digest statements become Confirmed Input. Statements retain source provenance, checkpointable source wording is bounded, extraction gaps stay visible, and partial extraction requires explicit acknowledgement.
+- The Brain now maintains a validated prioritized Question Roadmap with dependencies and approves no more than one independent Lookahead Question during an in-flight Brain revision.
+- The Communicator can clarify that one decision through voice or text and produce an editable, non-authoritative Decision Summary without autonomous Brain submission.
+- PM-confirmed Decision Summaries queue until the authoritative revision applies and dependency revalidation succeeds; stale work is retained as `not applied` and cannot mutate the Specification.
+- Added truthful processing stages, immediate duplicate-safe confirmation feedback, and explicit abandonment before Final Review with pending work.
+- Original uploads, full extractions, durable provider file objects, multiple-file workflows, databases, and persistent document search remain out of scope and out of checkpoints.
+- Extended Prepared Demo to prove context preparation, Lookahead clarification, summary confirmation, progress, and staleness without OpenAI, microphone, network, or user-file dependencies.
+- Added independent contract, reducer, route, accessibility, privacy, reload, provenance, Live/Demo isolation, leaked-secret, and Playwright regression verification. Automated checks use mocks and fake media; live API, physical microphone, deployment, and provider-retention verification remain manual and unverified in this delivery.
 
 The complete approved handoff and acceptance criteria are in `V2_IMPLEMENTATION_HANDOFF.md`.
 

@@ -1,71 +1,73 @@
-# Spec Grill — three-minute demo storyboard
+# Spec Grill — three-minute V2 demo storyboard
 
 Target length: 3:00. Capture at 1280×720 or larger in current desktop Chrome. Use non-confidential test content. Keep the `Prepared demo • no AI call` and `Live AI` provenance labels visible whenever their modes are shown.
 
-## 0:00–0:20 — The problem and the boundary
+## 0:00–0:18 — The problem and the authority boundary
 
 **Picture:** Start screen, then a close view of the two mode cards.
 
-**Narration:** “Spec Grill turns vague product intent into a traceable Specification one consequential decision at a time. Live Mode uses genuine AI calls. Prepared Demo is deterministic, needs no key or microphone, and is never presented as live output.”
+**Narration:** “Spec Grill turns vague product intent into a traceable Specification one consequential decision at a time. Live Mode uses genuine AI calls. Prepared Demo is deterministic, needs no key, network, user file, or microphone, and is never presented as live output.”
 
-**Evidence to show:** privacy notice, disabled/configured Live state as applicable, `Live AI`, and `Prepared demo • no AI call` labels.
+**Evidence to show:** privacy notice, configured/disabled Live state as applicable, `Live AI`, and `Prepared demo • no AI call`.
 
-## 0:20–1:02 — Deterministic product walkthrough
+## 0:18–0:55 — Reviewed rich context
 
-**Picture:** Start Prepared Demo. Advance the initial request, permissions, billing basis, and failed-payment decisions. Pause briefly on the role map and payment state Visual Aid, then show revision changes and provenance chips.
+**Picture:** Start Prepared Demo. Show the bundled `team-billing-project-brief.md`, activate `Prepare bundled context`, then pause on the editable Project Context Digest and its source references before confirmation.
 
-**Narration:** “The prepared team-billing walkthrough uses prevalidated local snapshots and reviewed, locally bundled prompt audio. Every substantive item has a stable ID, status, and source turn. Visual Aids are schema-driven React views with text alternatives—never model-authored markup.”
+**Narration:** “V2 begins with an Initial Prompt and one optional pasted or uploaded source. Supported files and product limits are validated before interview start. Only explicitly confirmed digest wording becomes Confirmed Input. The bounded digest keeps stable source references; original bytes and the full extraction never enter the reload checkpoint.”
 
-**Evidence to show:** `Use prepared answer`, revision number, `confirmed`/`derived`/`unresolved` chips, one Visual Aid summary, and changed-item highlight.
+**Evidence to show:** bundled-source notice, preparation stages without a fake percentage, editable digest statements, filename/location provenance, coverage, and `Confirm prepared digest`.
 
-## 1:02–1:35 — Live approval gate and meaningful GPT-5.6 use
+**Optional cutaway:** Use the verified partial-PDF fixture to show an exact missing-page warning and the acknowledgement gate. Do not imply that the prepared sample itself is partially extracted.
 
-**Picture:** Switch to Live text mode on a properly configured local environment. Type a short product request, select `Review answer`, edit the Answer Draft, then select `Send to Brain`. Show the analyzing state and the resulting complete revision.
+## 0:55–1:34 — One safe Lookahead and stale-work quarantine
 
-**Narration:** “Text and voice share the same approval gate. An Answer Draft cannot mutate the Specification or reach the Brain. Explicit confirmation sends the full confirmed state to server-side GPT-5.6 with medium reasoning, Structured Outputs, and `store: false`. Schema and semantic checks must pass before the browser atomically replaces the revision.”
+**Picture:** Confirm the prepared digest, advance permissions, and show the single billing-basis Lookahead panel during prepared processing. Pause on its clarification exchange and non-authoritative Decision Summary. Confirm it, then show `not applied` with the stale reason.
 
-**Evidence to show:** `Not yet confirmed`, edited draft, `Send to Brain`, honest analyzing status, Live provenance, new revision, and one next prompt.
+**Narration:** “The Brain alone maintains the Question Roadmap and may approve at most one dependency-independent Lookahead Question. The Communicator can clarify only that topic and creates an editable, non-authoritative Decision Summary. Confirmation queues the wording; the authoritative revision applies first, then dependency revalidation decides whether it may reach the Brain. This prepared branch intentionally becomes stale, so it is preserved for reuse but never changes the Specification.”
 
-**Capture rule:** If a real key is not configured, use prerecorded evidence from an actually verified Live smoke. Do not use Prepared Demo data or a mocked response while narrating it as live GPT-5.6 output.
+**Evidence to show:** `One safe lookahead`, Brain-approved revision, roadmap item identity, uncertainty retained, `Confirm and queue pending revalidation`, one visible Lookahead only, `not applied`, stale reason, and unchanged authoritative revision.
 
-## 1:35–2:02 — Controlled voice chain
+## 1:34–2:02 — Live confirmation and meaningful GPT-5.6 use
 
-**Picture:** On the presentation device, play the concise Communicator prompt, use `Answer now`, speak one short answer, then edit the transcription before confirmation. Keep the microphone status visible.
+**Picture:** On a properly configured local environment, prepare and confirm a small non-confidential digest, type an answer, select `Review answer`, edit the Answer Draft, and select `Send to Brain`. Show honest processing or one genuinely approved Lookahead, followed by the validated revision.
 
-**Narration:** “The Communicator uses native WebRTC with GPT Realtime for prompt audio and semantic turn detection. `create_response` is false, so the voice model cannot answer or call the Brain autonomously. GPT-4o Transcribe creates an editable draft; only the Product Manager’s confirmed text crosses the Brain boundary.”
+**Narration:** “Text and voice share the same approval gate. Raw extraction, speech, transcripts, clarification content, and unconfirmed summaries cannot reach the Brain. Explicit confirmation sends the bounded confirmed state to server-side GPT-5.6 with medium reasoning, Structured Outputs, and `store: false`. Schema and semantic checks must pass before the browser atomically replaces the revision.”
 
-**Evidence to show:** microphone off during playback, listening/speech/transcribing text states, editable transcription, and no Brain analysis before confirmation.
+**Evidence to show:** digest confirmation, `Not yet confirmed`, edited draft, immediate disabled/submitting feedback, Live provenance, revision, item provenance, and one next prompt.
 
-**Fallback:** If physical voice verification is not complete, show the verified fake-media browser test result and say that hardware voice remains a manual presentation-device check.
+**Capture rule:** Show this as live GPT-5.6 only if an actual opt-in Live run was completed. Otherwise use the mocked-browser evidence and explicitly label it mocked; never substitute Prepared data or claim live output.
 
-## 2:02–2:31 — Deferral, readiness, and reversible finalization
+## 2:02–2:25 — Controlled voice and Final Review abandonment
 
-**Picture:** Defer one prompt with a committee/date note. Open Final Review, show the unresolved item and provisional Decision Owner, finalize, then select `Resume grilling` and display the next Brain-approved prompt.
+**Picture:** If physically verified, play one concise Communicator prompt, use `Answer now`, speak, and edit the transcription. Then show the pending-work Final Review gate, its acknowledgement, and a late response being ignored.
 
-**Narration:** “Deferral records unresolved work; its note never becomes the missing decision. Readiness is categorical, and the Product Manager may finalize with follow-ups visible. Finalization is reversible in the current tab. A Live resume asks the stateless Brain for the next valuable question without inventing a new Conversation Turn.”
+**Narration:** “Realtime uses semantic VAD with `create_response` false, so the voice model cannot call the Brain autonomously. Final Review never silently accepts pending work: abandonment is explicit, pending summary wording becomes not applied, and late responses are stale.”
 
-**Evidence to show:** optional deferral note, Open Question or Blocker, Next Action ownership state, readiness evidence, finalized controls, and resumed revision/prompt.
+**Fallback:** If physical voice verification is incomplete, show the passing fake-media transcript test and say that presentation-device microphone behavior remains unverified.
 
-## 2:31–2:48 — Export and resilience
+## 2:25–2:45 — Reload privacy and export
 
-**Picture:** Download final Markdown and open the top and Next Actions sections. Briefly cut to an invalid-output recovery screen with the prior revision still visible.
+**Picture:** Reload the partial-context browser fixture, show the restored digest-driven interview, then open Final Review and download Markdown. Briefly show `Exit and clear session` removing the checkpoint.
 
-**Narration:** “Export is generated locally in the required section order with model provenance, IDs, statuses, and sources—but no raw conversation or audio. Invalid or stale AI output never replaces the last valid Specification.”
+**Narration:** “Reload restores only the confirmed digest, its provenance and warnings, and validated revisions. Temporary extraction is gone, so deep lookup requires re-upload. Export is generated locally with provenance, IDs, statuses, and sources—but no raw conversation or audio.”
 
-**Evidence to show:** filename, final export without a draft warning, provenance metadata, Open Questions/Next Actions, and preserved revision beside a recoverable error.
+**Evidence to show:** restored filename/warning, no full-extraction marker in checkpoint evidence, Markdown provenance and Next Actions, explicit clear confirmation, and return to Start.
 
-## 2:48–3:00 — Verification and close
+## 2:45–3:00 — Verification and close
 
-**Picture:** Terminal montage of the passing lint, typecheck, unit/integration, five-test Playwright, and production build commands, ending on the completed Prepared Demo Final Review.
+**Picture:** Terminal montage of the passing lint, typecheck, unit/integration, Playwright, leaked-secret scan, and production build commands, ending on Prepared Demo Final Review.
 
-**Narration:** “Codex built the MVP in bounded architecture, Brain, Realtime, experience, and verification workstreams. Automated tests use mocked providers and fake media; real API and physical microphone checks are reported separately and never inferred.”
+**Narration:** “Codex delivered V2 through bounded contracts, Brain, Realtime, experience, integration, and verification workstreams. Automated tests use mocked providers and fake media. Live API, physical microphone, deployment, and provider retention are reported separately and never inferred.”
 
 ## Capture checklist
 
-- [ ] Remove notifications, unrelated tabs, keys, project identifiers, request payloads, transcripts not intended for the demo, and confidential data from the recording.
+- [ ] Remove notifications, unrelated tabs, keys, project identifiers, request payloads, unintended transcripts, and confidential data.
 - [ ] Use large cursor/highlight settings and keep important UI text readable at final video resolution.
 - [ ] Confirm Prepared and Live provenance is visible and accurate in every shot.
+- [ ] Confirm the Prepared walkthrough makes no Brain, Realtime, context API, OpenAI, microphone, or user-file request.
 - [ ] Listen to all eight generated MP3s and confirm the spoken words match the prepared prompts before demonstrating audio.
-- [ ] Record actual Live output only after the opt-in smoke and physical microphone checklist pass.
-- [ ] Do not claim Zero Data Retention unless the active OpenAI project has been verified for it.
+- [ ] Record actual Live output only after the opt-in smoke passes with a dedicated capped project.
+- [ ] Record physical voice only after the presentation-device checklist passes.
+- [ ] Do not claim deployment, provider-retention verification, or Zero Data Retention unless each was genuinely verified.
 - [ ] Keep final runtime under 3:00 and leave at least two seconds on the closing Final Review frame.
