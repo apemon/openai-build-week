@@ -9,6 +9,10 @@ import type {
 import { brainModelOutputSchema } from "@/domain/schemas";
 import type { BrainModelOutput, BrainRequest, BrainResponse } from "@/domain/types";
 
+import {
+  logBrainProviderTrace,
+  type BrainProviderStatus,
+} from "./debug-log";
 import { BRAIN_SYSTEM_PROMPT, buildBrainInput, buildRepairInput } from "./prompt";
 import {
   BRAIN_POLL_INTERVAL_MS,
@@ -45,11 +49,25 @@ interface ProviderResponse {
   status?: unknown;
   output_parsed?: unknown;
   output?: unknown;
+  usage?: unknown;
 }
 
 interface AttemptResult {
   output: BrainModelOutput;
   actualModel: string;
+}
+
+interface TraceContext {
+  requestId: string;
+  operation: BrainRequest["operation"];
+  attempt: 1 | 2;
+}
+
+interface SafeUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  reasoningTokens?: number;
+  totalTokens?: number;
 }
 
 function containsRefusal(output: unknown): boolean {
@@ -143,6 +161,85 @@ function responseId(response: unknown): string | null {
   return typeof id === "string" && id.length > 0 ? id : null;
 }
 
+function safeProviderStatus(response: unknown): BrainProviderStatus {
+  const status = responseStatus(response);
+  return status === "queued"
+    || status === "in_progress"
+    || status === "completed"
+    || status === "failed"
+    || status === "incomplete"
+    || status === "cancelled"
+    ? status
+    : "unknown";
+}
+
+function safeProviderModel(response: unknown): string | undefined {
+  if (!response || typeof response !== "object") return undefined;
+  const model = (response as ProviderResponse).model;
+  return typeof model === "string" ? model : undefined;
+}
+
+function safeOutputItemCount(response: unknown): number {
+  if (!response || typeof response !== "object") return 0;
+  const output = (response as ProviderResponse).output;
+  return Array.isArray(output) ? output.length : 0;
+}
+
+function safeUsage(response: unknown): SafeUsage {
+  if (!response || typeof response !== "object") return {};
+  const usage = (response as ProviderResponse).usage;
+  if (!usage || typeof usage !== "object") return {};
+  const candidate = usage as Record<string, unknown>;
+  const outputDetails = candidate.output_tokens_details;
+  const reasoningTokens = outputDetails && typeof outputDetails === "object"
+    ? (outputDetails as Record<string, unknown>).reasoning_tokens
+    : undefined;
+  const result: SafeUsage = {};
+  if (typeof candidate.input_tokens === "number") result.inputTokens = candidate.input_tokens;
+  if (typeof candidate.output_tokens === "number") result.outputTokens = candidate.output_tokens;
+  if (typeof reasoningTokens === "number") result.reasoningTokens = reasoningTokens;
+  if (typeof candidate.total_tokens === "number") result.totalTokens = candidate.total_tokens;
+  return result;
+}
+
+function traceResponse(
+  trace: TraceContext,
+  call: "create" | "retrieve" | "cancel",
+  sequence: number,
+  response: unknown,
+  elapsedMs: number,
+): void {
+  logBrainProviderTrace({
+    ...trace,
+    call,
+    direction: "response",
+    sequence,
+    status: safeProviderStatus(response),
+    actualModel: safeProviderModel(response),
+    elapsedMs,
+    outputItemCount: safeOutputItemCount(response),
+    hasProviderResponseId: responseId(response) !== null,
+    ...safeUsage(response),
+  });
+}
+
+function traceError(
+  trace: TraceContext,
+  call: "create" | "retrieve" | "cancel" | "validate",
+  sequence: number,
+  error: unknown,
+  elapsedMs: number,
+): void {
+  logBrainProviderTrace({
+    ...trace,
+    call,
+    direction: "error",
+    sequence,
+    elapsedMs,
+    errorCode: mapProviderError(error).code,
+  });
+}
+
 function parseTerminalResponse(response: unknown, body: unknown): unknown {
   if (!response || typeof response !== "object") return response;
   const candidate = response as ProviderResponse;
@@ -163,21 +260,40 @@ const CANCEL_TIMEOUT_MS = 2_000;
 async function bestEffortCancel(
   responses: ResponsesClient,
   providerResponseId: string | null,
+  trace: TraceContext,
+  sequence: number,
 ): Promise<void> {
   if (!providerResponseId) return;
   const controller = new AbortController();
   let timeout: ReturnType<typeof setTimeout> | undefined;
+  const startedAt = Date.now();
+  logBrainProviderTrace({
+    ...trace,
+    call: "cancel",
+    direction: "request",
+    sequence,
+    hasProviderResponseId: true,
+  });
   try {
-    await Promise.race([
-      responses.cancel(providerResponseId, { signal: controller.signal }),
-      new Promise<void>((resolve) => {
+    const outcome = await Promise.race([
+      responses.cancel(providerResponseId, { signal: controller.signal }).then((response) => ({
+        kind: "response" as const,
+        response,
+      })),
+      new Promise<{ kind: "timeout" }>((resolve) => {
         timeout = setTimeout(() => {
           controller.abort();
-          resolve();
+          resolve({ kind: "timeout" });
         }, CANCEL_TIMEOUT_MS);
       }),
     ]);
-  } catch {
+    if (outcome.kind === "timeout") {
+      traceError(trace, "cancel", sequence, new DOMException("aborted", "AbortError"), Date.now() - startedAt);
+    } else {
+      traceResponse(trace, "cancel", sequence, outcome.response, Date.now() - startedAt);
+    }
+  } catch (error) {
+    traceError(trace, "cancel", sequence, error, Date.now() - startedAt);
     // Cancellation is cleanup only; preserve the application timeout result.
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
@@ -191,6 +307,7 @@ async function providerAttempt(
   timeoutMs: number,
   pollIntervalMs: number,
   request: BrainRequest,
+  attempt: 1 | 2,
   externalSignal?: AbortSignal,
 ): Promise<AttemptResult> {
   const controller = new AbortController();
@@ -199,6 +316,12 @@ async function providerAttempt(
   externalSignal?.addEventListener("abort", onExternalAbort, { once: true });
   if (externalSignal?.aborted) controller.abort();
   let providerResponseId: string | null = null;
+  let sequence = 0;
+  const trace: TraceContext = {
+    requestId: request.requestId,
+    operation: request.operation,
+    attempt,
+  };
   try {
     controller.signal.throwIfAborted();
     const body = {
@@ -212,7 +335,27 @@ async function providerAttempt(
       ],
       text: { format: zodTextFormat(brainModelOutputSchema, "brain_model_output") },
     };
-    let response = await responses.create(body, { signal: controller.signal });
+    logBrainProviderTrace({
+      ...trace,
+      call: "create",
+      direction: "request",
+      sequence,
+      requestedModel: model,
+      background: true,
+      store: false,
+      reasoningEffort: "medium",
+      schemaName: "brain_model_output",
+      hasProviderResponseId: false,
+    });
+    const createStartedAt = Date.now();
+    let response: unknown;
+    try {
+      response = await responses.create(body, { signal: controller.signal });
+      traceResponse(trace, "create", sequence, response, Date.now() - createStartedAt);
+    } catch (error) {
+      traceError(trace, "create", sequence, error, Date.now() - createStartedAt);
+      throw error;
+    }
     providerResponseId = responseId(response);
 
     while (responseStatus(response) === "queued" || responseStatus(response) === "in_progress") {
@@ -224,15 +367,55 @@ async function providerAttempt(
         );
       }
       await waitForPoll(pollIntervalMs, controller.signal);
-      response = await responses.retrieve(providerResponseId, undefined, {
-        signal: controller.signal,
+      sequence += 1;
+      logBrainProviderTrace({
+        ...trace,
+        call: "retrieve",
+        direction: "request",
+        sequence,
+        hasProviderResponseId: true,
       });
+      const retrieveStartedAt = Date.now();
+      try {
+        response = await responses.retrieve(providerResponseId, undefined, {
+          signal: controller.signal,
+        });
+        traceResponse(trace, "retrieve", sequence, response, Date.now() - retrieveStartedAt);
+      } catch (error) {
+        traceError(trace, "retrieve", sequence, error, Date.now() - retrieveStartedAt);
+        throw error;
+      }
     }
 
-    return validateProviderResponse(parseTerminalResponse(response, body), request);
+    logBrainProviderTrace({
+      ...trace,
+      call: "validate",
+      direction: "request",
+      sequence,
+      status: safeProviderStatus(response),
+      hasProviderResponseId: providerResponseId !== null,
+    });
+    const validateStartedAt = Date.now();
+    try {
+      const result = validateProviderResponse(parseTerminalResponse(response, body), request);
+      logBrainProviderTrace({
+        ...trace,
+        call: "validate",
+        direction: "response",
+        sequence,
+        status: "completed",
+        actualModel: result.actualModel,
+        elapsedMs: Date.now() - validateStartedAt,
+        hasProviderResponseId: providerResponseId !== null,
+      });
+      return result;
+    } catch (error) {
+      traceError(trace, "validate", sequence, error, Date.now() - validateStartedAt);
+      throw error;
+    }
   } catch (error) {
     if (controller.signal.aborted) {
-      await bestEffortCancel(responses, providerResponseId);
+      await bestEffortCancel(responses, providerResponseId, trace, sequence + 1);
       throw new BrainRunError("MODEL_TIMEOUT", "The Brain request timed out.", true, { cause: error });
     }
     throw mapProviderError(error);
@@ -262,6 +445,7 @@ export async function runBrain(request: BrainRequest, options: BrainRunnerOption
       timeoutMs,
       pollIntervalMs,
       request,
+      1,
       options.signal,
     );
   } catch (error) {
@@ -277,6 +461,7 @@ export async function runBrain(request: BrainRequest, options: BrainRunnerOption
       timeoutMs,
       pollIntervalMs,
       request,
+      2,
       options.signal,
     );
   }

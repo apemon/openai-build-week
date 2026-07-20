@@ -35,7 +35,9 @@ describe("background Brain contract verification", () => {
     expect(runner).toContain('responseStatus(response) === "queued"');
     expect(runner).toContain('responseStatus(response) === "in_progress"');
     expect(runner).toContain("responses.retrieve(providerResponseId");
-    expect(runner).toContain("bestEffortCancel(responses, providerResponseId)");
+    expect(runner).toMatch(
+      /bestEffortCancel\(\s*responses,\s*providerResponseId,\s*trace,\s*sequence \+ 1,?\s*\)/,
+    );
   });
 
   it("documents temporary background retention without claiming live verification", () => {

@@ -51,12 +51,14 @@ Open [http://localhost:3000](http://localhost:3000). With the example configurat
 | `OPENAI_REALTIME_MODEL` | Realtime Communicator model | `gpt-realtime-2.1` |
 | `OPENAI_TRANSCRIPTION_MODEL` | Input transcription model | `gpt-4o-transcribe` |
 | `LIVE_AI_ENABLED` | Server-side Live kill switch | `false` |
-| `BRAIN_DEBUG_LOGS` | Emit content-free Brain submission metadata to server logs | `false` |
+| `BRAIN_DEBUG_LOGS` | Server-only, content-free Brain submission and provider lifecycle trace | `false` |
 | `ALLOWED_ORIGIN` | Exact browser origin accepted by guarded routes | `http://localhost:3000` |
 
 Keep the standard key in `.env.local` or the deployment provider's encrypted server environment. Never add `NEXT_PUBLIC_` credentials. Use a dedicated OpenAI project with conservative spend and rate limits, and enable Live only for controlled presentation windows.
 
-Set `BRAIN_DEBUG_LOGS=true` locally to trace valid Brain submissions in the server terminal. Each request logs `submitted` and then `succeeded` or `failed`, with request metadata and elapsed time only. Answer text, prompts, transcripts, Specifications, credentials, and provider payloads are never logged.
+Set `BRAIN_DEBUG_LOGS=true` only in the server environment during controlled troubleshooting. In addition to content-free submission lifecycle records, it emits a safe provider trace prefixed `[spec-grill:brain:provider]`. The trace follows the official [Responses background lifecycle](https://developers.openai.com/api/docs/guides/background): `create`, `retrieve` polling, best-effort `cancel`, plus local `validate`. Records identify request/response/error direction, attempt 1 or 2, nonnegative sequence, and only the relevant status, model, background/store/reasoning/schema configuration, timing, item counts, token-usage totals, application error code, or whether a provider response ID was available.
+
+The trace uses a strict metadata allowlist. It never serializes raw requests or responses, input/body/content, output or parsed output, provider response IDs, exception messages, validation text, prompts, answer text, transcripts, Specifications, credentials, or temporary client secrets. Keep `BRAIN_DEBUG_LOGS=false` outside a short diagnostic window; it is server-only and must never be renamed with a `NEXT_PUBLIC_` prefix. On hosted deployments these records enter the hosting platform's server-log system, so restrict log access and retention even though the records are content-free.
 
 ## Verification
 
@@ -79,7 +81,7 @@ The normal test suite uses mocked provider boundaries and requires neither an Op
 6. preservation of the last valid Specification after invalid Brain output; and
 7. explicit deferral, finalization with follow-ups, stateless resume, and final export.
 
-Axe scans cover Start, context review, Interview, Answer Draft, Lookahead, and Final Review states for critical/serious violations. Unit and integration coverage includes context/file limits, partial extraction, schemas, Brain semantics and route failures, provenance, Realtime event ordering/session locks, duplicate-action protection, reducer ordering and stale responses, checkpoint sanitization/expiry, visual aids, prepared snapshots, and Markdown export.
+Axe scans cover Start, context review, Interview, Answer Draft, Lookahead, and Final Review states for critical/serious violations. Unit and integration coverage includes context/file limits, partial extraction, schemas, Brain semantics and route failures, provenance, safe provider-trace allowlisting and sentinel exclusion, Realtime event ordering/session locks, duplicate-action protection, reducer ordering and stale responses, checkpoint sanitization/expiry, visual aids, prepared snapshots, and Markdown export.
 
 Normal CI must not call OpenAI or depend on microphone hardware. Live smoke testing is opt-in and should be run only with the dedicated project explicitly enabled.
 

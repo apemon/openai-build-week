@@ -1,6 +1,6 @@
 import refusalFixture from "../fixtures/brain-refusal.json";
 import validFixture from "../fixtures/brain-valid.json";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { runBrain } from "@/agents/brain/run-brain";
 import { BrainRunError } from "@/agents/brain/retry-policy";
@@ -30,6 +30,14 @@ const request = brainRequestSchema.parse({
   currentPrompt: null
 });
 
+const originalDebugSetting = process.env.BRAIN_DEBUG_LOGS;
+
+afterEach(() => {
+  if (originalDebugSetting === undefined) delete process.env.BRAIN_DEBUG_LOGS;
+  else process.env.BRAIN_DEBUG_LOGS = originalDebugSetting;
+  vi.restoreAllMocks();
+});
+
 function providerResponse(output: unknown = validFixture) {
   const parsedOutput = output === validFixture ? structuredClone(validFixture) : output;
   if (parsedOutput && typeof parsedOutput === "object" && "questionRoadmap" in parsedOutput && output === validFixture) {
@@ -56,6 +64,12 @@ function providerResponse(output: unknown = validFixture) {
         ],
       },
     ],
+    usage: {
+      input_tokens: 120,
+      output_tokens: 80,
+      output_tokens_details: { reasoning_tokens: 35 },
+      total_tokens: 200,
+    },
   };
 }
 
@@ -101,6 +115,8 @@ describe("runBrain", () => {
   });
 
   it("polls queued and in-progress background responses until completion", async () => {
+    process.env.BRAIN_DEBUG_LOGS = "true";
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const create = vi.fn().mockResolvedValue({ id: "resp_001", status: "queued", output: [] });
     const retrieve = vi
       .fn()
@@ -122,6 +138,32 @@ describe("runBrain", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(responses.cancel).not.toHaveBeenCalled();
+
+    const trace = info.mock.calls
+      .filter(([prefix]) => prefix === "[spec-grill:brain:provider]")
+      .map(([, payload]) => JSON.parse(String(payload)) as Record<string, unknown>);
+    expect(trace.map(({ call, direction }) => [call, direction])).toEqual([
+      ["create", "request"],
+      ["create", "response"],
+      ["retrieve", "request"],
+      ["retrieve", "response"],
+      ["retrieve", "request"],
+      ["retrieve", "response"],
+      ["validate", "request"],
+      ["validate", "response"],
+    ]);
+    expect(trace.map(({ sequence }) => sequence)).toEqual([0, 0, 1, 1, 2, 2, 2, 2]);
+    expect(trace[5]).toMatchObject({
+      status: "completed",
+      inputTokens: 120,
+      outputTokens: 80,
+      reasoningTokens: 35,
+      totalTokens: 200,
+    });
+    const serializedTrace = JSON.stringify(trace);
+    expect(serializedTrace).not.toContain("resp_001");
+    expect(serializedTrace).not.toContain("We need team billing");
+    expect(serializedTrace).not.toContain("output_parsed");
   });
 
   it("makes exactly one repair attempt after semantic rejection", async () => {
@@ -189,6 +231,8 @@ describe("runBrain", () => {
   });
 
   it("aborts and maps an application timeout", async () => {
+    process.env.BRAIN_DEBUG_LOGS = "true";
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const create = vi.fn().mockResolvedValue({ id: "resp_timeout", status: "queued", output: [] });
     const retrieve = vi.fn((_id: string, _query?: unknown, options?: { signal?: AbortSignal }) => {
       return new Promise((_resolve, reject) => {
@@ -221,6 +265,14 @@ describe("runBrain", () => {
     );
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(cancelFinished).toBe(true);
+    const trace = info.mock.calls
+      .filter(([prefix]) => prefix === "[spec-grill:brain:provider]")
+      .map(([, payload]) => JSON.parse(String(payload)) as Record<string, unknown>);
+    expect(trace).toEqual(expect.arrayContaining([
+      expect.objectContaining({ call: "cancel", direction: "request", hasProviderResponseId: true }),
+      expect.objectContaining({ call: "cancel", direction: "response", status: "cancelled" }),
+    ]));
+    expect(JSON.stringify(trace)).not.toContain("resp_timeout");
   });
 
   it("uses the application abort signal when the SDK rejection shape is unknown", async () => {
