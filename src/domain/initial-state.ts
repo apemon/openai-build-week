@@ -1,4 +1,4 @@
-import type { InterviewPrompt, SessionMode, SessionState, Specification } from "./types";
+import type { ConfirmedProjectContextDigest, InterviewPrompt, QuestionRoadmap, SessionMode, SessionState, Specification } from "./types";
 import { createId } from "./ids";
 
 export const emptySpecification: Specification = {
@@ -30,6 +30,34 @@ export const initialInterviewPrompt: InterviewPrompt = {
   visualAid: null,
 };
 
+export function createInitialContextDigest(now = new Date()): ConfirmedProjectContextDigest {
+  return {
+    id: "DIGEST-INITIAL",
+    initialPrompt: "What do you want to build?",
+    statements: [{
+      id: "CTX-001",
+      statement: "The Product Manager wants to define a product to build.",
+      sourceReferences: [{ sourceId: "SOURCE-INITIAL", location: "Initial Prompt", page: null, heading: null, paragraph: 1 }],
+    }],
+    sources: [{ id: "SOURCE-INITIAL", kind: "initial_prompt", filename: null, mimeType: "text/plain", sizeBytes: null, characterCount: 26, pageCount: null }],
+    coverage: { coveredLocations: ["Initial Prompt"], omissions: [], warnings: [], requiresAcknowledgement: false },
+    confirmedAt: now.toISOString(),
+  };
+}
+
+export function createEmptyQuestionRoadmap(revision = 0): QuestionRoadmap {
+  return {
+    id: "ROADMAP-STATE",
+    baseRevision: revision,
+    dependencyVersion: `DEPENDENCY-${revision}`,
+    items: [],
+    currentDecisionItemId: null,
+    completedItemIds: [],
+    unresolvedDependencyIds: [],
+    lookaheadApproval: null,
+  };
+}
+
 export function createInitialState(mode: SessionMode, now = new Date()): SessionState {
   const expiresAt = new Date(now.getTime() + 30 * 60 * 1_000);
   return {
@@ -42,6 +70,14 @@ export function createInitialState(mode: SessionMode, now = new Date()): Session
     turns: [],
     specification: emptySpecification,
     currentPrompt: initialInterviewPrompt,
+    contextPreparation: null,
+    confirmedContextDigest: null,
+    temporaryExtractionAvailable: false,
+    questionRoadmap: createEmptyQuestionRoadmap(),
+    activeLookahead: null,
+    staleLookaheadReason: null,
+    staleDecisionSummaries: [],
+    processingStage: "idle",
     answerDraft: null,
     lastFinalizedRevision: null,
     finalizedSpecification: null,

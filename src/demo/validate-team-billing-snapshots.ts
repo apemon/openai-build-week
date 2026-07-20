@@ -1,5 +1,5 @@
 import { validateBrainOutput } from "@/agents/brain/semantic-validator";
-import { emptySpecification } from "@/domain/initial-state";
+import { createEmptyQuestionRoadmap, createInitialContextDigest, emptySpecification } from "@/domain/initial-state";
 import { preparedTurnAt } from "./team-billing-scenario";
 import { teamBillingPrompts, teamBillingSnapshots, validatePreparedSnapshots } from "./team-billing-snapshots";
 
@@ -19,11 +19,15 @@ export function validateTeamBillingSnapshotsSemantically(): { success: true; sna
         baseRevision: index,
         operation: "answer",
         turns,
+        confirmedContextDigest: createInitialContextDigest(),
+        questionRoadmap: createEmptyQuestionRoadmap(index),
+        relevantSourceExcerpts: [],
         currentSpecification: index === 0 ? emptySpecification : teamBillingSnapshots[index - 1],
         currentPrompt: teamBillingPrompts[index],
       },
       {
         specification: teamBillingSnapshots[index],
+        questionRoadmap: createEmptyQuestionRoadmap(index + 1),
         nextPrompt: teamBillingPrompts[index + 1] ?? null,
         changeSummary: ["Validated deterministic prepared snapshot."],
       },

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { POST } from "@/app/api/brain/route";
-import { emptySpecification } from "@/domain/initial-state";
+import { createEmptyQuestionRoadmap, createInitialContextDigest, emptySpecification } from "@/domain/initial-state";
 
 const originalEnvironment = {
   LIVE_AI_ENABLED: process.env.LIVE_AI_ENABLED,
@@ -41,6 +41,9 @@ function validBody(): Record<string, unknown> {
         createdAt: new Date().toISOString(),
       },
     ],
+    confirmedContextDigest: createInitialContextDigest(),
+    questionRoadmap: createEmptyQuestionRoadmap(),
+    relevantSourceExcerpts: [],
     currentSpecification: emptySpecification,
     currentPrompt: null,
   };

@@ -8,6 +8,15 @@ export function getInvariantErrors(state: SessionState): string[] {
   if (state.phase === "analyzing" && state.pendingRequest === null) {
     errors.push("Analyzing requires a pending request");
   }
+  if (state.activeLookahead && state.activeLookahead.approval.roadmapItemId !== state.activeLookahead.decisionSummary?.roadmapItemId && state.activeLookahead.decisionSummary) {
+    errors.push("A Decision Summary must remain bound to its active Lookahead Question");
+  }
+  if (state.phase === "queued_decision_summary" && state.activeLookahead?.decisionSummary?.status !== "confirmed_queued") {
+    errors.push("A queued Decision Summary must be explicitly confirmed");
+  }
+  if (state.processingStage !== "idle" && state.pendingRequest === null) {
+    errors.push("Processing progress requires a pending Brain request");
+  }
   if (state.mode === "demo" && state.provenance.source !== "prepared_demo") {
     errors.push("Demo state requires prepared provenance");
   }

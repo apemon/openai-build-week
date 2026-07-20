@@ -6,7 +6,7 @@ import { InterviewRoom } from "@/components/interview/InterviewRoom";
 import { StartScreen } from "@/components/start/StartScreen";
 import { PreparedDemoRunner, playPreparedAudio } from "@/demo/demo-runner";
 import { createId } from "@/domain/ids";
-import { createInitialState, emptySpecification } from "@/domain/initial-state";
+import { createInitialContextDigest, createInitialState, emptySpecification } from "@/domain/initial-state";
 import { apiErrorSchema, brainResponseSchema, realtimeSessionResponseSchema } from "@/domain/schemas";
 import { sessionReducer } from "@/domain/session-reducer";
 import type { AnswerDraft, ConversationTurn, NextAction, RecoverableError, SpecificationItem } from "@/domain/types";
@@ -134,7 +134,7 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
     const requestId = createId("REQ");
     const baseRevision = state.revision;
     lastBrainOperation.current = operation;
-    dispatch({ type: "BRAIN_REQUESTED", requestId, turn });
+    dispatch({ type: "BRAIN_REQUESTED", requestId, actionId: requestId, operation, turn });
     communicator.pauseForTextInput();
     try {
       const response = await fetch("/api/brain", {
@@ -148,6 +148,9 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
           baseRevision,
           operation,
           turns: [...state.turns, turn],
+          confirmedContextDigest: state.confirmedContextDigest ?? createInitialContextDigest(),
+          questionRoadmap: state.questionRoadmap,
+          relevantSourceExcerpts: [],
           currentSpecification: state.specification,
           currentPrompt: state.currentPrompt,
         }),
@@ -174,12 +177,13 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
     if (state.mode !== "live" || state.phase === "analyzing") return;
     const requestId = createId("REQ");
     lastBrainOperation.current = operation;
-    dispatch({ type: operation === "resume" ? "BRAIN_RESUME_REQUESTED" : "BRAIN_RETRY_REQUESTED", requestId });
+    if (operation === "resume") dispatch({ type: "BRAIN_RESUME_REQUESTED", requestId, actionId: requestId });
+    else dispatch({ type: "BRAIN_RETRY_REQUESTED", requestId, actionId: requestId, operation });
     try {
       const response = await fetch("/api/brain", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ schemaVersion: 1, sessionId: state.sessionId, mode: "live", requestId, baseRevision: state.revision, operation, turns: state.turns, currentSpecification: state.specification, currentPrompt: state.currentPrompt }),
+        body: JSON.stringify({ schemaVersion: 1, sessionId: state.sessionId, mode: "live", requestId, baseRevision: state.revision, operation, turns: state.turns, confirmedContextDigest: state.confirmedContextDigest ?? createInitialContextDigest(), questionRoadmap: state.questionRoadmap, relevantSourceExcerpts: [], currentSpecification: state.specification, currentPrompt: state.currentPrompt }),
       });
       const payload: unknown = await response.json();
       if (!response.ok) {

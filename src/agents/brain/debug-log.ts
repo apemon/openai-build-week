@@ -1,8 +1,9 @@
 import type { BrainErrorCode } from "./retry-policy";
+import type { BrainOperation } from "@/domain/types";
 
 type BrainSubmissionBase = {
   requestId: string;
-  operation: "answer" | "defer" | "correct" | "resume";
+  operation: BrainOperation;
   baseRevision: number;
   turnCount: number;
   requestedModel: string;

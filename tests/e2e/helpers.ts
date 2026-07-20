@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, type Route } from "@playwright/test";
 import { teamBillingPrompts, teamBillingSnapshots } from "@/demo/team-billing-snapshots";
+import { createEmptyQuestionRoadmap } from "@/domain/initial-state";
 import type { BrainRequest, InterviewPrompt, Specification } from "@/domain/types";
 
 export async function expectNoSeriousAxeViolations(page: Page): Promise<void> {
@@ -43,6 +44,7 @@ export function brainResponse(
     },
     output: {
       specification,
+      questionRoadmap: createEmptyQuestionRoadmap(request.baseRevision + 1),
       nextPrompt,
       changeSummary: ["Applied a validated test revision."],
     },

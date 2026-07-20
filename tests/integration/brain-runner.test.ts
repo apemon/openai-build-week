@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { runBrain } from "@/agents/brain/run-brain";
 import { BrainRunError } from "@/agents/brain/retry-policy";
 import { brainModelOutputSchema, brainRequestSchema } from "@/domain/schemas";
-import { emptySpecification } from "@/domain/initial-state";
+import { createEmptyQuestionRoadmap, createInitialContextDigest, emptySpecification } from "@/domain/initial-state";
 
 const request = brainRequestSchema.parse({
   schemaVersion: 1,
@@ -23,6 +23,9 @@ const request = brainRequestSchema.parse({
       createdAt: "2026-07-20T00:00:00.000Z"
     }
   ],
+  confirmedContextDigest: createInitialContextDigest(new Date("2026-07-20T00:00:00.000Z")),
+  questionRoadmap: createEmptyQuestionRoadmap(4),
+  relevantSourceExcerpts: [],
   currentSpecification: emptySpecification,
   currentPrompt: null
 });

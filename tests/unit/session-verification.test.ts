@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createInitialState } from "@/domain/initial-state";
+import { createEmptyQuestionRoadmap, createInitialState } from "@/domain/initial-state";
 import { sessionReducer } from "@/domain/session-reducer";
 import type { BrainResponse, ConversationTurn, SessionState } from "@/domain/types";
 import { teamBillingSnapshots } from "@/demo/team-billing-snapshots";
@@ -43,6 +43,7 @@ function response(requestId = "REQ-TEST", baseRevision = 0): BrainResponse {
     },
     output: {
       specification: teamBillingSnapshots[0],
+      questionRoadmap: createEmptyQuestionRoadmap(baseRevision + 1),
       nextPrompt: null,
       changeSummary: ["Captured the requested product."],
     },
@@ -59,6 +60,8 @@ describe("session reducer verification", () => {
     const pending = sessionReducer(reviewingState(), {
       type: "BRAIN_REQUESTED",
       requestId: "REQ-TEST",
+      actionId: "ACTION-TEST",
+      operation: "answer",
       turn,
     });
     const stale = sessionReducer(pending, {
@@ -117,9 +120,9 @@ describe("session reducer verification", () => {
       lastFinalizedRevision: 3,
       finalizedSpecification: teamBillingSnapshots[0],
     };
-    const pending = sessionReducer(finalized, { type: "BRAIN_RESUME_REQUESTED", requestId: "REQ-RESUME" });
+    const pending = sessionReducer(finalized, { type: "BRAIN_RESUME_REQUESTED", requestId: "REQ-RESUME", actionId: "ACTION-RESUME" });
     expect(pending.phase).toBe("analyzing");
-    expect(pending.pendingRequest).toEqual({ requestId: "REQ-RESUME", baseRevision: 3 });
+    expect(pending.pendingRequest).toEqual({ requestId: "REQ-RESUME", baseRevision: 3, operation: "resume", actionId: "ACTION-RESUME" });
     expect(pending.turns).toEqual([turn]);
   });
 });

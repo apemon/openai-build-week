@@ -9,7 +9,15 @@ export function createCheckpoint(state: SessionState, now = new Date()): Session
     answerDraft: null,
     pendingRequest: null,
     error: null,
-    phase: state.phase === "reviewing_answer" || state.phase === "analyzing" ? "presenting_prompt" : state.phase,
+    contextPreparation: null,
+    temporaryExtractionAvailable: false,
+    activeLookahead: null,
+    staleLookaheadReason: null,
+    staleDecisionSummaries: [],
+    processingStage: "idle",
+    phase: ["reviewing_answer", "analyzing", "clarifying_lookahead", "reviewing_decision_summary", "queued_decision_summary"].includes(state.phase)
+      ? "presenting_prompt"
+      : state.phase,
   };
   return checkpointSchema.parse({ schemaVersion: 1, savedAt: now.toISOString(), state: safeState });
 }
