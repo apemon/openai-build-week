@@ -32,6 +32,8 @@ export const v3BrainOperationSchema = z.enum([
   "revalidate_restored",
 ]);
 
+export const brainHarnessModeSchema = z.enum(["one_shot", "responses_native", "codex_ephemeral"]);
+
 export const externalEvidenceTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("specification_item"), itemId: entityId }).strict(),
   z.object({ kind: z.literal("prompt_recommendation"), promptId: entityId }).strict(),
@@ -364,9 +366,24 @@ export const v3BrainModelOutputSchema = z
   })
   .strict();
 
+export const experimentalBrainProvenanceSchema = z.object({
+  source: z.literal("experimental_evaluation"),
+  agent: z.literal("brain"),
+  harnessMode: brainHarnessModeSchema,
+  publicSearchEnabled: z.boolean(),
+  localOnly: z.literal(true),
+  requestedModel: z.string().trim().min(1).max(100),
+  actualModel: z.string().trim().min(1).max(100),
+  validatedAt: isoDate,
+  repairAttempted: z.boolean(),
+}).strict();
+
 export const v3BrainResponseSchema = brainResponseSchema
-  .omit({ output: true })
-  .extend({ output: v3BrainModelOutputSchema })
+  .omit({ output: true, provenance: true })
+  .extend({
+    provenance: z.union([brainResponseSchema.shape.provenance, experimentalBrainProvenanceSchema]),
+    output: v3BrainModelOutputSchema,
+  })
   .strict();
 
 export const brainStreamEnvelopeSchema = z.discriminatedUnion("type", [
@@ -437,8 +454,6 @@ export const v3CheckpointSchema = z
   })
   .strict();
 
-export const brainHarnessModeSchema = z.enum(["one_shot", "responses_native", "codex_ephemeral"]);
-
 export type V3Specification = z.infer<typeof v3SpecificationSchema>;
 export type V3InterviewPrompt = z.infer<typeof v3InterviewPromptSchema>;
 export type ExternalEvidence = z.infer<typeof externalEvidenceSchema>;
@@ -466,4 +481,3 @@ export type V3Checkpoint = z.infer<typeof v3CheckpointSchema>;
 export type BrainHarnessMode = z.infer<typeof brainHarnessModeSchema>;
 export type ConfirmedContextForV3 = z.infer<typeof confirmedProjectContextDigestSchema>;
 export type DurableTurnForV3 = z.infer<typeof conversationTurnSchema>;
-

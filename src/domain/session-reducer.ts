@@ -86,9 +86,10 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
       break;
     case "BRAIN_REQUESTED":
       if (state.pendingRequest) return state;
-      if (event.operation !== "initialize" && event.operation !== "resume" && !event.turn) return state;
+      if (!["initialize", "resume", "decision_batch", "revalidate_restored"].includes(event.operation) && !event.turn) return state;
       if (event.operation === "initialize" && (!state.confirmedContextDigest || state.revision !== 0 || event.turn)) return state;
       if (event.operation === "resume" && event.turn) return state;
+      if ((event.operation === "decision_batch" || event.operation === "revalidate_restored") && event.turn) return state;
       if (event.operation === "answer" && event.turn?.type !== "confirmed_answer") return state;
       if (event.operation === "correct" && event.turn?.type !== "correction") return state;
       if (event.operation === "defer" && event.turn?.type !== "deferred_prompt") return state;
@@ -139,6 +140,12 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
         processingStage: "idle",
         error: null,
       };
+      if (state.pendingRequest.operation === "decision_batch") {
+        if (!event.batchTurns?.length || event.batchTurns.length > 3) return state;
+        const ids = new Set(event.batchTurns.map((turn) => turn.id));
+        if (ids.size !== event.batchTurns.length || event.batchTurns.some((turn) => !["confirmed_decision_summary", "deferred_prompt"].includes(turn.type))) return state;
+        next = { ...next, turns: [...state.turns, ...event.batchTurns] };
+      } else if (event.batchTurns?.length) return state;
       if (state.activeLookahead?.decisionSummary?.status === "submitted") {
         next = { ...next, activeLookahead: null };
       } else if (state.activeLookahead) {
@@ -169,6 +176,10 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
       }
       break;
     }
+    case "BRAIN_NONMUTATING_RESPONSE_RECEIVED":
+      if (!state.pendingRequest || state.pendingRequest.requestId !== event.requestId || state.pendingRequest.baseRevision !== event.baseRevision) return state;
+      next = { ...state, pendingRequest: null, processingStage: "idle", phase: state.currentPrompt ? "presenting_prompt" : "final_review", error: null };
+      break;
     case "PROCESSING_STAGE_CHANGED":
       if (state.phase !== "analyzing") return state;
       next = { ...state, processingStage: event.stage };

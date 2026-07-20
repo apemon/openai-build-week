@@ -73,6 +73,7 @@ export const specificationItemSchema = z.object({
   status: itemStatusSchema,
   sourceTurnIds: z.array(entityId).max(30),
   rationale: z.string().trim().max(2_000),
+  externalEvidenceIds: z.array(z.string().regex(/^EVID-[0-9]{3,}$/)).max(10).default([]),
 });
 
 export const acceptanceCriterionSchema = z.object({
@@ -113,7 +114,7 @@ export const interviewPromptSchema = z.object({
   confirmedContext: z.array(shortText).max(12),
   decisionImpact: z.array(shortText).max(12),
   recommendation: z
-    .object({ answer: shortText, rationale: z.string().trim().min(1).max(2_000) })
+    .object({ answer: shortText, rationale: z.string().trim().min(1).max(2_000), externalEvidenceIds: z.array(z.string().regex(/^EVID-[0-9]{3,}$/)).max(10).default([]) })
     .nullable(),
   visualAid: visualAidSchema.nullable(),
 });
@@ -220,6 +221,8 @@ export const brainOperationSchema = z.enum([
   "correct",
   "resume",
   "decision_summary",
+  "decision_batch",
+  "revalidate_restored",
 ]);
 
 export const roadmapItemSchema = z.object({
@@ -287,6 +290,19 @@ export const processingStageSchema = z.enum([
   "planning_next_question",
 ]);
 
+export const externalEvidenceTargetSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("specification_item"), itemId: entityId }),
+  z.object({ kind: z.literal("prompt_recommendation"), promptId: entityId }),
+]);
+
+export const externalEvidenceSchema = z.object({
+  id: z.string().regex(/^EVID-[0-9]{3,}$/),
+  title: z.string().trim().min(1).max(300),
+  url: z.string().url().max(2_048).refine((value) => value.startsWith("https://"), "External evidence URLs must use HTTPS"),
+  retrievedAt: isoDate,
+  informedTargets: z.array(externalEvidenceTargetSchema).min(1).max(20),
+});
+
 export const specificationSchema = z.object({
   title: z.string().trim().min(1).max(200),
   problemStatement: z.array(specificationItemSchema).max(20),
@@ -302,6 +318,7 @@ export const specificationSchema = z.object({
   acceptanceCriteria: z.array(acceptanceCriterionSchema).max(150),
   nextActions: z.array(nextActionSchema).max(60),
   readiness: readinessAssessmentSchema,
+  externalEvidence: z.array(externalEvidenceSchema).max(20).default([]),
 });
 
 export const conversationTurnSchema = z.object({

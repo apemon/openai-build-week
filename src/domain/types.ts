@@ -19,6 +19,8 @@ import type {
   conversationTurnSchema,
   decisionSummarySchema,
   extractedSourceExcerptSchema,
+  externalEvidenceSchema,
+  externalEvidenceTargetSchema,
   interviewPromptSchema,
   itemKindSchema,
   itemStatusSchema,
@@ -61,6 +63,8 @@ export type ContextDigestStatement = z.infer<typeof contextDigestStatementSchema
 export type ProjectContextDigest = z.infer<typeof projectContextDigestSchema>;
 export type ConfirmedProjectContextDigest = z.infer<typeof confirmedProjectContextDigestSchema>;
 export type ExtractedSourceExcerpt = z.infer<typeof extractedSourceExcerptSchema>;
+export type ExternalEvidence = z.infer<typeof externalEvidenceSchema>;
+export type ExternalEvidenceTarget = z.infer<typeof externalEvidenceTargetSchema>;
 export type TemporaryContextExtraction = z.infer<typeof temporaryContextExtractionSchema>;
 export type ContextPreparation = z.infer<typeof contextPreparationSchema>;
 export type ContextPreparationFields = z.infer<typeof contextPreparationFieldsSchema>;

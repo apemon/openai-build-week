@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { logBrainSubmission } from "@/agents/brain/debug-log";
+import { readBrainHarnessConfiguration } from "@/agents/brain/harness-config";
+import { createLiveBrainHarness } from "@/agents/brain/harnesses";
+import { BRAIN_STREAM_CONTENT_TYPE, createBrainNdjsonStream } from "@/agents/brain/ndjson-stream";
 import { BrainRunError } from "@/agents/brain/retry-policy";
-import { runBrain } from "@/agents/brain/run-brain";
 import { parseBrainTimeoutMs } from "@/agents/brain/runtime-config";
-import { validateBrainRequest } from "@/agents/brain/semantic-validator";
-import { brainRequestSchema } from "@/domain/schemas";
+import { validateV3BrainRequest } from "@/agents/brain/v3-semantic-validator";
+import { v3BrainRequestSchema } from "@/domain/v3-schemas";
 import type { ApiError } from "@/domain/types";
 
 export const runtime = "nodejs";
@@ -53,7 +54,7 @@ function hasValidOrigin(request: Request): boolean {
   return request.headers.get("origin") === allowedOrigin;
 }
 
-export async function POST(request: Request): Promise<NextResponse> {
+export async function POST(request: Request): Promise<Response> {
   let requestId = requestIdFrom(request);
 
   if (process.env.LIVE_AI_ENABLED !== "true" || !process.env.OPENAI_API_KEY) {
@@ -86,14 +87,27 @@ export async function POST(request: Request): Promise<NextResponse> {
   } catch {
     return errorResponse("INVALID_REQUEST", "The request body is not valid JSON.", false, requestId, 400);
   }
-  const parsed = brainRequestSchema.safeParse(json);
+  if (json && typeof json === "object" && "requestId" in json) {
+    const candidate = (json as { requestId?: unknown }).requestId;
+    if (typeof candidate === "string" && /^[A-Z][A-Z0-9_-]{1,63}$/.test(candidate)) requestId = candidate;
+  }
+  const parsed = v3BrainRequestSchema.safeParse(json);
   if (!parsed.success) {
     return errorResponse("INVALID_REQUEST", "The Brain request is invalid.", false, requestId, 400);
   }
   requestId = parsed.data.requestId;
-  const semanticRequest = validateBrainRequest(parsed.data);
+  const semanticRequest = validateV3BrainRequest(parsed.data);
   if (!semanticRequest.valid) {
     return errorResponse("INVALID_REQUEST", "The Brain request is invalid.", false, requestId, 400);
+  }
+  if (parsed.data.externalEvidenceBundle.length > 0) {
+    return errorResponse(
+      "INVALID_REQUEST",
+      "Frozen External Evidence is accepted only by the local evaluation runner.",
+      false,
+      requestId,
+      400,
+    );
   }
 
   const now = Date.now();
@@ -105,36 +119,18 @@ export async function POST(request: Request): Promise<NextResponse> {
     return errorResponse("INVALID_REQUEST", "The Interview Session has expired.", false, requestId, 410);
   }
 
-  const requestedModel = process.env.OPENAI_BRAIN_MODEL ?? "gpt-5.6";
-  const timeoutMs = parseBrainTimeoutMs(process.env.OPENAI_BRAIN_TIMEOUT_MS);
-  const startedAt = Date.now();
-  const logContext = {
-    requestId,
-    operation: parsed.data.operation,
-    baseRevision: parsed.data.baseRevision,
-    turnCount: parsed.data.turns.length,
-    requestedModel,
-    timeoutMs,
-    executionMode: "background" as const,
-  } as const;
-  logBrainSubmission({ event: "submitted", ...logContext });
-
   try {
-    const response = await runBrain(parsed.data, {
-      timeoutMs,
-      signal: request.signal,
-    });
-    logBrainSubmission({
-      event: "succeeded",
-      ...logContext,
-      elapsedMs: Date.now() - startedAt,
-      revision: response.revision,
-      actualModel: response.provenance.actualModel,
-      repairAttempted: response.provenance.repairAttempted,
-    });
-    return NextResponse.json(response, {
+    const configuration = readBrainHarnessConfiguration("live_route");
+    const timeoutMs = parseBrainTimeoutMs(process.env.OPENAI_BRAIN_TIMEOUT_MS);
+    const harness = createLiveBrainHarness(configuration, { timeoutMs });
+    return new Response(createBrainNdjsonStream(parsed.data, harness, request.signal), {
       status: 200,
-      headers: { "Cache-Control": "no-store" },
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Type": BRAIN_STREAM_CONTENT_TYPE,
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "X-Content-Type-Options": "nosniff",
+      },
     });
   } catch (error) {
     const mapped =
@@ -142,14 +138,6 @@ export async function POST(request: Request): Promise<NextResponse> {
         ? error
         : new BrainRunError("INTERNAL_ERROR", "The Brain request failed.", true, { cause: error });
     const status = statusFor(mapped);
-    logBrainSubmission({
-      event: "failed",
-      ...logContext,
-      elapsedMs: Date.now() - startedAt,
-      errorCode: mapped.code,
-      retryable: mapped.retryable,
-      status,
-    });
     return errorResponse(mapped.code, mapped.message, mapped.retryable, requestId, status);
   }
 }

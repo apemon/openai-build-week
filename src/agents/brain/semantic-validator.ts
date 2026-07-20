@@ -23,7 +23,7 @@ export const MAX_RELEVANT_SOURCE_EXCERPT_CHARACTERS = 24_000;
 
 type ItemSection = Exclude<
   keyof Specification,
-  "title" | "acceptanceCriteria" | "nextActions" | "readiness"
+  "title" | "acceptanceCriteria" | "nextActions" | "readiness" | "externalEvidence"
 >;
 
 const itemSections: Array<{
@@ -305,6 +305,8 @@ function expectedLatestTurnType(operation: BrainRequest["operation"]): Conversat
       return "confirmed_decision_summary";
     case "initialize":
     case "resume":
+    case "decision_batch":
+    case "revalidate_restored":
       return null;
   }
 }

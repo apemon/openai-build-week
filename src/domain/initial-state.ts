@@ -16,6 +16,7 @@ export const emptySpecification: Specification = {
   acceptanceCriteria: [],
   nextActions: [],
   readiness: { status: "draft", evidence: [], blockerIds: [], openQuestionIds: [] },
+  externalEvidence: [],
 };
 
 export const initialInterviewPrompt: InterviewPrompt = {

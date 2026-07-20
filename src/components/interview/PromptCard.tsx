@@ -2,9 +2,11 @@
 
 import { useId, useState } from "react";
 import type { InterviewPrompt } from "@/domain/types";
+import type { ExternalEvidence } from "@/domain/v3-schemas";
+import { ExternalEvidenceCitations } from "../specification/ExternalEvidence";
 import { VisualAid } from "../visual-aids/VisualAid";
 
-export function PromptCard({ prompt, onDefer, onAnswerNow, preparedAudioUnavailable = false }: { prompt: InterviewPrompt; onDefer?: (note: string) => void; onAnswerNow?: () => void; preparedAudioUnavailable?: boolean }) {
+export function PromptCard({ prompt, onDefer, onAnswerNow, preparedAudioUnavailable = false, externalEvidence = [] }: { prompt: InterviewPrompt; onDefer?: (note: string) => void; onAnswerNow?: () => void; preparedAudioUnavailable?: boolean; externalEvidence?: readonly ExternalEvidence[] }) {
   const noteId = useId();
   const [showDeferral, setShowDeferral] = useState(false);
   const [deferralNote, setDeferralNote] = useState("");
@@ -23,6 +25,7 @@ export function PromptCard({ prompt, onDefer, onAnswerNow, preparedAudioUnavaila
       </div>
       {prompt.confirmedContext.length > 0 && <div className="mt-4"><h3 className="text-sm font-semibold">Confirmed context</h3><ul className="mt-1 list-disc pl-5 text-sm text-stone-300">{prompt.confirmedContext.map((value) => <li key={value}>{value}</li>)}</ul></div>}
       <div className="mt-4 rounded-xl bg-stone-950 p-3 text-sm"><span className="font-semibold">AI recommendation: </span>{prompt.recommendation ? `${prompt.recommendation.answer} — ${prompt.recommendation.rationale}` : "No recommendation yet"}</div>
+      {prompt.recommendation && <ExternalEvidenceCitations evidence={externalEvidence} evidenceIds={(prompt.recommendation as typeof prompt.recommendation & { externalEvidenceIds?: string[] }).externalEvidenceIds ?? []} />}
       {prompt.visualAid && <div className="mt-5"><p className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-400">Visual Aid</p><VisualAid aid={prompt.visualAid} /></div>}
       {preparedAudioUnavailable && <p role="status" className="mt-4 text-sm text-amber-200">Prepared prompt audio is unavailable; continue with the visible prompt.</p>}
       <div className="mt-5 flex flex-wrap gap-3">

@@ -1,16 +1,17 @@
 import { interviewPromptSchema, specificationSchema } from "@/domain/schemas";
 import type { InterviewPrompt, Specification, SpecificationItem } from "@/domain/types";
 
-type SectionKey = Exclude<keyof Specification, "title" | "readiness">;
+type SectionKey = Exclude<keyof Specification, "title" | "readiness" | "externalEvidence">;
 
 function item(id: string, kind: SpecificationItem["kind"], statement: string, sourceTurnIds: string[], status: SpecificationItem["status"] = "confirmed"): SpecificationItem {
-  return { id, kind, statement, status, sourceTurnIds, rationale: status === "confirmed" ? "Directly confirmed in the prepared walkthrough." : "Derived from confirmed prepared decisions." };
+  return { id, kind, statement, status, sourceTurnIds, rationale: status === "confirmed" ? "Directly confirmed in the prepared walkthrough." : "Derived from confirmed prepared decisions.", externalEvidenceIds: [] };
 }
 
 const empty: Specification = {
   title: "Team billing for a SaaS workspace",
   problemStatement: [], users: [], jobsToBeDone: [], functionalRequirements: [], nonFunctionalRequirements: [], assumptions: [], risks: [], edgeCases: [], openQuestions: [], blockers: [], acceptanceCriteria: [], nextActions: [],
   readiness: { status: "draft", evidence: ["The product request has not yet covered the core billing decisions."], blockerIds: [], openQuestionIds: [] },
+  externalEvidence: [],
 };
 
 function withItems(base: Specification, entries: Partial<Pick<Specification, SectionKey>>): Specification {

@@ -50,7 +50,8 @@ export type SessionEvent =
   | { type: "BRAIN_REQUESTED"; requestId: string; actionId: string; operation: BrainOperation; turn?: ConversationTurn }
   | { type: "BRAIN_RETRY_REQUESTED"; requestId: string; actionId: string; operation: BrainOperation }
   | { type: "BRAIN_RESUME_REQUESTED"; requestId: string; actionId: string }
-  | { type: "BRAIN_RESPONSE_RECEIVED"; response: BrainResponse }
+  | { type: "BRAIN_RESPONSE_RECEIVED"; response: BrainResponse; batchTurns?: ConversationTurn[] }
+  | { type: "BRAIN_NONMUTATING_RESPONSE_RECEIVED"; requestId: string; baseRevision: number }
   | { type: "PROCESSING_STAGE_CHANGED"; stage: ProcessingStage }
   | { type: "LOOKAHEAD_STARTED"; approval: LookaheadApproval }
   | { type: "CLARIFICATION_TURN_ADDED"; turn: ClarificationTurn }
@@ -75,6 +76,8 @@ export type SessionEvent =
 /** Frozen V3 reducer boundary. These events are consumed by the V3 reducer
  * extension only after V3.0; V1/V2 events remain available during migration. */
 export type V3SessionEvent =
+  | { type: "V3_RUNTIME_RESET" }
+  | { type: "V3_DEMO_FRAME_LOADED"; interviewWindow: InterviewWindow | null; jobs: InterviewJob[]; activeJobId: string | null; lockedBatch: DecisionBatch | null; activity: { state: import("./v3-schemas").BrainActivityState; acceptedAt: string | null; lastLifecycleAt: string | null } }
   | { type: "V3_BRAIN_ACTION_ACCEPTED"; requestId: string; actionId: string; operation: V3BrainOperation; cancelEpoch: number; acceptedAt: string }
   | { type: "V3_BRAIN_LIFECYCLE_RECEIVED"; event: BrainLifecycleEvent }
   | { type: "V3_BRAIN_STREAM_INTERRUPTED"; requestId: string; actionId: string; cancelEpoch: number; observedAt: string }
@@ -92,5 +95,7 @@ export type V3SessionEvent =
   | { type: "V3_DECISION_BATCH_LOCKED"; batch: DecisionBatch }
   | { type: "V3_DECISION_BATCH_RETRY_REQUESTED"; batchId: string; requestId: string; actionId: string; cancelEpoch: number }
   | { type: "V3_RESTORED_ENTRIES_LOADED"; entries: RestoredAsyncEntry[] }
+  | { type: "V3_CHECKPOINT_RESTORED"; entries: RestoredAsyncEntry[]; adaptiveWindow: import("./v3-schemas").AdaptiveWindowState }
   | { type: "V3_RESTORED_REVALIDATION_REQUESTED"; requestId: string; actionId: string; cancelEpoch: number }
-  | { type: "V3_RESTORED_SUBMISSION_REQUESTED"; batch: DecisionBatch };
+  | { type: "V3_RESTORED_SUBMISSION_REQUESTED"; batch: DecisionBatch }
+  | { type: "V3_RESTORED_ENTRIES_DISCARDED" };

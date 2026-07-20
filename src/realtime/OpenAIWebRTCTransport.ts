@@ -4,7 +4,19 @@ import {
   createDecisionSummaryResponseEvent,
   parseDecisionSummaryOutput,
 } from "@/agents/communicator/clarification-presenter";
+import {
+  createV3AuthoritativePromptResponseEvent,
+  createV3ClarificationResponseEvent,
+  createV3DecisionSummaryResponseEvent,
+  createV3PromptResponseEvent,
+} from "@/agents/communicator/v3-presenter";
 import { lookaheadApprovalSchema } from "@/domain/schemas";
+import {
+  exchangeIdentitySchema,
+  questionPermitSchema,
+  type ExchangeIdentity,
+  type QuestionPermit,
+} from "@/domain/v3-schemas";
 import type { ClarificationTurn, LookaheadApproval } from "@/domain/types";
 
 import type {
@@ -12,7 +24,10 @@ import type {
   CommunicatorEvent,
   CommunicatorSessionConfig,
   MicrophoneState,
+  V3CommunicatorEvent,
 } from "./CommunicatorTransport";
+import { BoundedEventIdSet } from "./bounded-event-id-set";
+import type { IdentitySafeCommunicatorTransport } from "./IdentitySafeCommunicatorTransport";
 import { parseRealtimeServerEvent, type RealtimeServerEvent } from "./realtime-event-schemas";
 import {
   createLockedRealtimeSession,
@@ -25,6 +40,7 @@ const REALTIME_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
 const DATA_CHANNEL_OPEN_TIMEOUT_MS = 10_000;
 
 type Listener = (event: CommunicatorEvent) => void;
+type V3Listener = (event: V3CommunicatorEvent) => void;
 
 interface ActiveClarification {
   approval: LookaheadApproval;
@@ -35,6 +51,26 @@ type ClarificationResponseBinding = {
   purpose: "clarification_response" | "decision_summary";
   roadmapItemId: string;
 };
+
+type V3ResponseBinding = {
+  purpose: "speak_brain_prompt" | "clarification_response" | "decision_summary";
+  identity: ExchangeIdentity;
+};
+
+interface ActivePermittedExchange {
+  permit: QuestionPermit;
+  identity: ExchangeIdentity;
+  turns: ClarificationTurn[];
+  paused: boolean;
+  responsePending: boolean;
+}
+
+interface CaptureBinding {
+  itemId: string;
+  identity: ExchangeIdentity;
+  speechAccepted: boolean;
+  preserveBehindRevalidation: boolean;
+}
 
 export interface OpenAIWebRTCTransportDependencies {
   createPeerConnection?: () => RTCPeerConnection;
@@ -48,16 +84,19 @@ export interface PromptDeliveryDiagnostic {
   matchedApprovedQuestion: boolean | null;
 }
 
-export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport {
+export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport, IdentitySafeCommunicatorTransport {
   private readonly createPeerConnection: () => RTCPeerConnection;
   private readonly getUserMedia: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
   private readonly fetchImplementation: typeof globalThis.fetch;
   private readonly createAudioElement: () => HTMLAudioElement;
   private readonly listeners = new Set<Listener>();
+  private readonly v3Listeners = new Set<V3Listener>();
+  private readonly providerEventIds = new BoundedEventIdSet();
   private readonly responsePromptIds = new Map<string, string>();
   private readonly approvedQuestions = new Map<string, string>();
   private readonly outputTranscripts = new Map<string, string>();
   private readonly clarificationResponses = new Map<string, ClarificationResponseBinding>();
+  private readonly v3Responses = new Map<string, V3ResponseBinding>();
   private peerConnection: RTCPeerConnection | null = null;
   private dataChannel: RTCDataChannel | null = null;
   private localStream: MediaStream | null = null;
@@ -67,6 +106,10 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
   private activeResponseId: string | null = null;
   private activeTranscriptionItemId: string | null = null;
   private activeClarification: ActiveClarification | null = null;
+  private activePermittedExchange: ActivePermittedExchange | null = null;
+  private activeAuthoritativeIdentity: ExchangeIdentity | null = null;
+  private captureBinding: CaptureBinding | null = null;
+  private cancelEpoch = 0;
   private activeClarificationResponseId: string | null = null;
   private clarificationResponsePending = false;
   private clarificationTurnSequence = 0;
@@ -189,12 +232,165 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
     return () => this.listeners.delete(listener);
   }
 
+  subscribeV3(listener: V3Listener): () => void {
+    this.v3Listeners.add(listener);
+    return () => this.v3Listeners.delete(listener);
+  }
+
   getMicrophoneState(): MicrophoneState {
     return this.microphoneState;
   }
 
   getLastPromptDeliveryDiagnostic(): PromptDeliveryDiagnostic | null {
     return this.lastPromptDelivery;
+  }
+
+  speakPromptWithIdentity(identity: ExchangeIdentity, spokenQuestion: string): void {
+    const parsedIdentity = exchangeIdentitySchema.parse(identity);
+    if (parsedIdentity.kind !== "authoritative_or_app_prompt") {
+      throw new Error("Authoritative prompt speech requires a non-permitted Exchange Identity.");
+    }
+    this.requireConnected();
+    this.requireCurrentEpoch(parsedIdentity.cancelEpoch);
+    if (this.activePermittedExchange || this.activeAuthoritativeIdentity) {
+      throw new Error("A different identity-bound exchange is already active.");
+    }
+    this.setMicrophoneEnabled(false);
+    this.activeAuthoritativeIdentity = parsedIdentity;
+    this.approvedQuestions.set(parsedIdentity.promptId, spokenQuestion.trim());
+    try {
+      this.sendEvent(createV3AuthoritativePromptResponseEvent(parsedIdentity, spokenQuestion));
+    } catch (error) {
+      this.activeAuthoritativeIdentity = null;
+      throw error;
+    }
+  }
+
+  cancelAuthoritativeExchange(identity: ExchangeIdentity, nextCancelEpoch: number): void {
+    const parsedIdentity = exchangeIdentitySchema.parse(identity);
+    if (!this.activeAuthoritativeIdentity || !sameIdentity(this.activeAuthoritativeIdentity, parsedIdentity)) {
+      throw new Error("Exchange identity does not match the active authoritative prompt.");
+    }
+    this.advanceCancellationEpoch(nextCancelEpoch);
+    this.preserveAcceptedCapture();
+    this.stopProviderOutputBestEffort();
+    this.removeV3ResponseBindings(parsedIdentity.exchangeId);
+    this.setMicrophoneEnabled(false);
+    this.activeAuthoritativeIdentity = null;
+  }
+
+  beginPermittedExchange(permit: QuestionPermit, identity: ExchangeIdentity): void {
+    const scope = parsePermittedScope(permit, identity);
+    this.requireConnected();
+    this.requireCurrentEpoch(scope.identity.cancelEpoch);
+    if (this.activePermittedExchange) {
+      if (sameIdentity(this.activePermittedExchange.identity, scope.identity)) return;
+      throw new Error("A different permitted exchange is already active.");
+    }
+    if (this.activeClarification || this.activeAuthoritativeIdentity) {
+      throw new Error("A different Communicator exchange is already active.");
+    }
+
+    this.setMicrophoneEnabled(false);
+    this.activePermittedExchange = {
+      permit: scope.permit,
+      identity: scope.identity,
+      turns: [],
+      paused: false,
+      responsePending: true,
+    };
+    try {
+      this.sendEvent(createV3PromptResponseEvent(scope.permit, scope.identity));
+    } catch (error) {
+      this.activePermittedExchange = null;
+      throw error;
+    }
+  }
+
+  submitPermittedClarification(text: string, identity: ExchangeIdentity): void {
+    const active = this.requireActivePermittedExchange(identity);
+    if (active.paused) throw new Error("The permitted exchange is paused.");
+    if (active.responsePending) throw new Error("The Communicator is still responding.");
+    const value = text.trim();
+    if (!value || value.length > 4_000) throw new Error("Clarification text is invalid.");
+    if (active.turns.length >= 20) throw new Error("The clarification exchange has reached its turn limit.");
+
+    active.turns.push(this.createClarificationTurn("product_manager", value));
+    active.responsePending = true;
+    this.setMicrophoneEnabled(false);
+    try {
+      this.sendEvent(createV3ClarificationResponseEvent(active.permit, active.identity, active.turns));
+    } catch (error) {
+      active.turns.pop();
+      active.responsePending = false;
+      throw error;
+    }
+  }
+
+  requestPermittedDecisionSummary(identity: ExchangeIdentity): void {
+    const active = this.requireActivePermittedExchange(identity);
+    if (active.paused) throw new Error("The permitted exchange is paused.");
+    if (active.responsePending) throw new Error("The Communicator is still responding.");
+    active.responsePending = true;
+    this.setMicrophoneEnabled(false);
+    try {
+      this.sendEvent(createV3DecisionSummaryResponseEvent(active.permit, active.identity, active.turns));
+    } catch (error) {
+      active.responsePending = false;
+      throw error;
+    }
+  }
+
+  pauseQuestions(nextCancelEpoch: number): void {
+    this.advanceCancellationEpoch(nextCancelEpoch);
+    const active = this.activePermittedExchange;
+    if (active) active.paused = true;
+    this.preserveAcceptedCapture();
+    this.stopProviderOutputBestEffort();
+    if (active) this.removeV3ResponseBindings(active.identity.exchangeId);
+    this.setMicrophoneEnabled(false);
+  }
+
+  resumeQuestions(permit: QuestionPermit, identity: ExchangeIdentity): void {
+    const scope = parsePermittedScope(permit, identity);
+    this.requireConnected();
+    this.requireCurrentEpoch(scope.identity.cancelEpoch);
+    const active = this.activePermittedExchange;
+    if (!active || !active.paused || active.identity.exchangeId !== scope.identity.exchangeId) {
+      throw new Error("The paused permitted exchange does not match the resume request.");
+    }
+
+    const unchangedPrompt = active.permit.prompt.id === scope.permit.prompt.id
+      && active.permit.prompt.spokenQuestion === scope.permit.prompt.spokenQuestion
+      && active.permit.prompt.detailedQuestion === scope.permit.prompt.detailedQuestion;
+    active.permit = scope.permit;
+    active.identity = scope.identity;
+    active.paused = false;
+    active.responsePending = !unchangedPrompt;
+    if (this.captureBinding?.preserveBehindRevalidation) {
+      active.responsePending = false;
+      this.setMicrophoneEnabled(false);
+      return;
+    }
+    if (unchangedPrompt) {
+      this.setMicrophoneEnabled(true);
+      return;
+    }
+    this.setMicrophoneEnabled(false);
+    this.sendEvent(createV3PromptResponseEvent(scope.permit, scope.identity));
+  }
+
+  cancelExchange(identity: ExchangeIdentity, nextCancelEpoch: number): void {
+    const parsedIdentity = exchangeIdentitySchema.parse(identity);
+    if (!this.activePermittedExchange || !sameIdentity(this.activePermittedExchange.identity, parsedIdentity)) {
+      throw new Error("Exchange identity does not match the active Question Permit.");
+    }
+    this.advanceCancellationEpoch(nextCancelEpoch);
+    this.preserveAcceptedCapture();
+    this.stopProviderOutputBestEffort();
+    this.setMicrophoneEnabled(false);
+    this.activePermittedExchange = null;
+    this.removeV3ResponseBindings(identity.exchangeId);
   }
 
   beginClarification(approval: LookaheadApproval): void {
@@ -309,6 +505,7 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
         }
         return;
       }
+      if (!this.providerEventIds.addIfNew(parsed.event.event_id)) return;
       this.handleProviderEvent(parsed.event);
     });
   }
@@ -339,7 +536,25 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
         if (this.microphoneState !== "listening") return;
         this.activeTranscriptionItemId = event.item_id;
         this.microphoneState = "speech_detected";
-        this.emit({ type: "speech_started", itemId: event.item_id });
+        const captureIdentity = this.activePermittedExchange && !this.activePermittedExchange.paused
+          ? this.activePermittedExchange.identity
+          : this.activeAuthoritativeIdentity;
+        if (captureIdentity) {
+          this.captureBinding = {
+            itemId: event.item_id,
+            identity: captureIdentity,
+            speechAccepted: true,
+            preserveBehindRevalidation: false,
+          };
+          this.emitV3({
+            type: "speech_started",
+            itemId: event.item_id,
+            identity: this.captureBinding.identity,
+            providerEventId: event.event_id,
+          });
+        } else {
+          this.emit({ type: "speech_started", itemId: event.item_id });
+        }
         return;
       case "input_audio_buffer.speech_stopped":
         if (
@@ -347,32 +562,79 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
           this.activeTranscriptionItemId !== event.item_id
         ) return;
         this.microphoneState = "transcribing";
-        this.emit({ type: "speech_stopped", itemId: event.item_id });
+        if (this.captureBinding?.itemId === event.item_id) {
+          this.emitV3({
+            type: "speech_stopped",
+            itemId: event.item_id,
+            identity: this.captureBinding.identity,
+            providerEventId: event.event_id,
+          });
+        } else {
+          this.emit({ type: "speech_stopped", itemId: event.item_id });
+        }
         return;
       case "conversation.item.input_audio_transcription.delta":
         if (
-          (this.microphoneState !== "transcribing" && this.microphoneState !== "speech_detected") ||
+          (
+            this.microphoneState !== "transcribing"
+            && this.microphoneState !== "speech_detected"
+            && !this.captureBinding?.preserveBehindRevalidation
+          ) ||
           this.activeTranscriptionItemId !== event.item_id
         ) {
           return;
         }
-        this.emit({ type: "transcript_delta", itemId: event.item_id, delta: event.delta });
+        if (this.captureBinding?.itemId === event.item_id) {
+          this.emitV3({
+            type: "transcript_delta",
+            itemId: event.item_id,
+            delta: event.delta,
+            identity: this.captureBinding.identity,
+            providerEventId: event.event_id,
+          });
+        } else {
+          this.emit({ type: "transcript_delta", itemId: event.item_id, delta: event.delta });
+        }
         return;
       case "conversation.item.input_audio_transcription.completed":
         if (
-          this.microphoneState !== "transcribing" ||
+          (
+            this.microphoneState !== "transcribing"
+            && !this.captureBinding?.preserveBehindRevalidation
+          ) ||
           this.activeTranscriptionItemId !== event.item_id
         ) return;
         this.setMicrophoneEnabled(false);
-        this.microphoneState = this.activeClarification ? "off" : "reviewing_answer";
+        this.microphoneState = this.activeClarification
+          || this.activePermittedExchange
+          || this.activeAuthoritativeIdentity
+          ? "off"
+          : "reviewing_answer";
         this.activeTranscriptionItemId = null;
-        this.emit({
-          type: "transcript_completed",
-          itemId: event.item_id,
-          transcript: event.transcript.slice(0, 4_000),
-        });
+        if (this.captureBinding?.itemId === event.item_id) {
+          const binding = this.captureBinding;
+          this.captureBinding = null;
+          this.emitV3({
+            type: "transcript_completed",
+            itemId: event.item_id,
+            transcript: event.transcript.slice(0, 4_000),
+            identity: binding.identity,
+            providerEventId: event.event_id,
+          });
+        } else {
+          this.emit({
+            type: "transcript_completed",
+            itemId: event.item_id,
+            transcript: event.transcript.slice(0, 4_000),
+          });
+        }
         return;
       case "response.created": {
+        const v3Binding = getV3ResponseBinding(event.response.metadata, this.currentV3Identity());
+        if (v3Binding && this.isCurrentV3Binding(v3Binding)) {
+          this.v3Responses.set(event.response.id, v3Binding);
+          return;
+        }
         const promptId = getPromptId(event.response.metadata);
         if (promptId && promptId === this.activePromptId) {
           this.activeResponseId = event.response.id;
@@ -389,6 +651,22 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
         return;
       }
       case "output_audio_buffer.started": {
+        const v3Binding = this.v3Responses.get(event.response_id);
+        if (v3Binding) {
+          if (!this.isCurrentV3Binding(v3Binding)) return;
+          if (v3Binding.purpose === "decision_summary") return;
+          void this.audioElement?.play().catch(() => {
+            this.emit({ type: "error", code: "AUDIO_PLAYBACK_FAILED", retryable: true });
+          });
+          if (v3Binding.purpose === "speak_brain_prompt") {
+            this.emitV3({
+              type: "prompt_playback_started",
+              identity: v3Binding.identity,
+              providerEventId: event.event_id,
+            });
+          }
+          return;
+        }
         const promptId = this.responsePromptIds.get(event.response_id);
         const clarification = this.clarificationResponses.get(event.response_id);
         if (!promptId && clarification?.purpose !== "clarification_response") return;
@@ -399,8 +677,11 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
         return;
       }
       case "response.output_audio_transcript.delta": {
+        const v3Binding = this.v3Responses.get(event.response_id);
+        if (v3Binding && !this.isCurrentV3Binding(v3Binding)) return;
         if (
           !this.responsePromptIds.has(event.response_id)
+          && !this.v3Responses.has(event.response_id)
           && this.clarificationResponses.get(event.response_id)?.purpose !== "clarification_response"
         ) return;
         const current = this.outputTranscripts.get(event.response_id) ?? "";
@@ -408,6 +689,34 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
         return;
       }
       case "response.output_audio_transcript.done": {
+        const v3Binding = this.v3Responses.get(event.response_id);
+        if (v3Binding) {
+          if (!this.isCurrentV3Binding(v3Binding)) return;
+          if (v3Binding.purpose === "speak_brain_prompt") {
+            const expected = this.activePermittedExchange?.permit.prompt.spokenQuestion
+              ?? this.approvedQuestions.get(v3Binding.identity.promptId);
+            this.lastPromptDelivery = {
+              promptId: v3Binding.identity.promptId,
+              matchedApprovedQuestion: expected
+                ? normalizeSpeech(event.transcript) === normalizeSpeech(expected)
+                : null,
+            };
+          } else if (v3Binding.purpose === "clarification_response") {
+            const text = event.transcript.trim();
+            if (!text || !this.activePermittedExchange) return;
+            if (this.activePermittedExchange.turns.length < 20) {
+              this.activePermittedExchange.turns.push(this.createClarificationTurn("communicator", text));
+            }
+            this.emitV3({
+              type: "clarification_response_done",
+              text,
+              identity: v3Binding.identity,
+              providerEventId: event.event_id,
+            });
+          }
+          this.outputTranscripts.delete(event.response_id);
+          return;
+        }
         const promptId = this.responsePromptIds.get(event.response_id);
         if (promptId) {
           const expected = this.approvedQuestions.get(promptId);
@@ -437,6 +746,23 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
         return;
       }
       case "response.output_text.done": {
+        const v3Binding = this.v3Responses.get(event.response_id);
+        if (v3Binding) {
+          if (!this.isCurrentV3Binding(v3Binding) || v3Binding.purpose !== "decision_summary") return;
+          const summary = parseDecisionSummaryOutput(event.text);
+          if (!summary) {
+            this.emit({ type: "error", code: "INVALID_DECISION_SUMMARY", retryable: true });
+            return;
+          }
+          this.emitV3({
+            type: "decision_summary_ready",
+            text: summary.text,
+            uncertainties: summary.uncertainties,
+            identity: v3Binding.identity,
+            providerEventId: event.event_id,
+          });
+          return;
+        }
         const binding = this.clarificationResponses.get(event.response_id);
         if (
           binding?.purpose !== "decision_summary"
@@ -457,6 +783,25 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
         return;
       }
       case "response.done": {
+        const v3Binding = this.v3Responses.get(event.response.id);
+        if (v3Binding) {
+          if (!this.isCurrentV3Binding(v3Binding)) return;
+          if (event.response.status !== "completed") {
+            this.emit({
+              type: "error",
+              code: v3Binding.purpose === "decision_summary"
+                ? "DECISION_SUMMARY_FAILED"
+                : v3Binding.purpose === "clarification_response"
+                  ? "CLARIFICATION_RESPONSE_FAILED"
+                  : "PROMPT_PLAYBACK_FAILED",
+              retryable: true,
+            });
+            this.finishV3Response(event.response.id, v3Binding, false, event.event_id);
+          } else if (v3Binding.purpose === "decision_summary") {
+            this.finishV3Response(event.response.id, v3Binding, false, event.event_id);
+          }
+          return;
+        }
         const promptId = this.responsePromptIds.get(event.response.id) ?? getPromptId(event.response.metadata);
         if (promptId) {
           if (event.response.status !== "completed") {
@@ -480,6 +825,12 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
         return;
       }
       case "output_audio_buffer.stopped": {
+        const v3Binding = this.v3Responses.get(event.response_id);
+        if (v3Binding) {
+          if (!this.isCurrentV3Binding(v3Binding)) return;
+          this.finishV3Response(event.response_id, v3Binding, true, event.event_id);
+          return;
+        }
         const promptId = this.responsePromptIds.get(event.response_id);
         if (promptId) {
           this.finishPromptPlayback(promptId);
@@ -506,6 +857,106 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
     } catch (error) {
       this.clarificationResponsePending = false;
       throw error;
+    }
+  }
+
+  private finishV3Response(
+    responseId: string,
+    binding: V3ResponseBinding,
+    resumeMicrophone: boolean,
+    providerEventId: string,
+  ): void {
+    this.v3Responses.delete(responseId);
+    this.outputTranscripts.delete(responseId);
+    const active = this.activePermittedExchange;
+    const authoritative = this.activeAuthoritativeIdentity;
+    if (
+      (!active || !sameIdentity(active.identity, binding.identity))
+      && (!authoritative || !sameIdentity(authoritative, binding.identity))
+    ) return;
+    if (active) active.responsePending = false;
+    if (binding.purpose === "speak_brain_prompt") {
+      this.emitV3({
+        type: "prompt_playback_done",
+        identity: binding.identity,
+        providerEventId,
+      });
+    }
+    if (
+      resumeMicrophone
+      && (!active || !active.paused)
+      && !this.captureBinding?.preserveBehindRevalidation
+    ) {
+      this.setMicrophoneEnabled(true);
+    }
+  }
+
+  private requireActivePermittedExchange(identity: ExchangeIdentity): ActivePermittedExchange {
+    const parsedIdentity = exchangeIdentitySchema.parse(identity);
+    const active = this.activePermittedExchange;
+    if (!active || !sameIdentity(active.identity, parsedIdentity)) {
+      throw new Error("Exchange identity does not match the active Question Permit.");
+    }
+    this.requireConnected();
+    this.requireCurrentEpoch(parsedIdentity.cancelEpoch);
+    return active;
+  }
+
+  private requireCurrentEpoch(epoch: number): void {
+    if (epoch !== this.cancelEpoch) {
+      throw new Error("Exchange cancellation epoch is stale.");
+    }
+  }
+
+  private advanceCancellationEpoch(nextCancelEpoch: number): void {
+    if (!Number.isInteger(nextCancelEpoch) || nextCancelEpoch <= this.cancelEpoch) {
+      throw new Error("Cancellation epoch must advance monotonically.");
+    }
+    // This assignment intentionally precedes every provider cancellation/clear.
+    this.cancelEpoch = nextCancelEpoch;
+  }
+
+  private preserveAcceptedCapture(): void {
+    if (this.captureBinding?.speechAccepted) {
+      this.captureBinding.preserveBehindRevalidation = true;
+    } else {
+      this.activeTranscriptionItemId = null;
+      this.captureBinding = null;
+    }
+  }
+
+  private stopProviderOutputBestEffort(): void {
+    try {
+      this.sendEvent({ type: "response.cancel" });
+      this.sendEvent({ type: "output_audio_buffer.clear" });
+    } catch {
+      // Epoch and local identity gates are the correctness boundary.
+    }
+    this.audioElement?.pause();
+  }
+
+  private isCurrentV3Binding(binding: V3ResponseBinding): boolean {
+    const active = this.activePermittedExchange;
+    const authoritative = this.activeAuthoritativeIdentity;
+    return Boolean(
+      (
+        (active && !active.paused && sameIdentity(active.identity, binding.identity))
+        || (authoritative && sameIdentity(authoritative, binding.identity))
+      )
+      && binding.identity.cancelEpoch === this.cancelEpoch,
+    );
+  }
+
+  private currentV3Identity(): ExchangeIdentity | null {
+    return this.activePermittedExchange?.identity ?? this.activeAuthoritativeIdentity;
+  }
+
+  private removeV3ResponseBindings(exchangeId: string): void {
+    for (const [responseId, binding] of this.v3Responses) {
+      if (binding.identity.exchangeId === exchangeId) {
+        this.v3Responses.delete(responseId);
+        this.outputTranscripts.delete(responseId);
+      }
     }
   }
 
@@ -617,6 +1068,10 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
     this.activeResponseId = null;
     this.activeTranscriptionItemId = null;
     this.activeClarification = null;
+    this.activePermittedExchange = null;
+    this.activeAuthoritativeIdentity = null;
+    this.captureBinding = null;
+    this.cancelEpoch = 0;
     this.activeClarificationResponseId = null;
     this.clarificationResponsePending = false;
     this.clarificationTurnSequence = 0;
@@ -625,11 +1080,17 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
     this.approvedQuestions.clear();
     this.outputTranscripts.clear();
     this.clarificationResponses.clear();
+    this.v3Responses.clear();
+    this.providerEventIds.clear();
     if (emitDisconnected) this.emit({ type: "disconnected", retryable: false });
   }
 
   private emit(event: CommunicatorEvent): void {
     this.listeners.forEach((listener) => listener(event));
+  }
+
+  private emitV3(event: V3CommunicatorEvent): void {
+    this.v3Listeners.forEach((listener) => listener(event));
   }
 }
 
@@ -653,6 +1114,50 @@ function getClarificationBinding(
     || metadata.dependencyVersion !== approval.dependencyVersion
   ) return null;
   return { purpose, roadmapItemId: approval.roadmapItemId };
+}
+
+function getV3ResponseBinding(
+  metadata: Record<string, string> | null | undefined,
+  activeIdentity: ExchangeIdentity | null,
+): V3ResponseBinding | null {
+  if (!activeIdentity) return null;
+  const purpose = metadata?.purpose;
+  if (
+    purpose !== "speak_brain_prompt"
+    && purpose !== "clarification_response"
+    && purpose !== "decision_summary"
+  ) return null;
+  const cancelEpoch = Number(metadata?.cancelEpoch);
+  const identity = exchangeIdentitySchema.safeParse({
+    kind: metadata?.identityKind,
+    exchangeId: metadata?.exchangeId,
+    promptId: metadata?.promptId,
+    permitId: metadata?.permitId || null,
+    cancelEpoch,
+  });
+  if (!identity.success || !sameIdentity(identity.data, activeIdentity)) return null;
+  return { purpose, identity: identity.data };
+}
+
+function parsePermittedScope(permit: QuestionPermit, identity: ExchangeIdentity) {
+  const parsedPermit = questionPermitSchema.parse(permit);
+  const parsedIdentity = exchangeIdentitySchema.parse(identity);
+  if (
+    parsedIdentity.kind !== "permitted"
+    || parsedIdentity.permitId !== parsedPermit.id
+    || parsedIdentity.promptId !== parsedPermit.prompt.id
+  ) {
+    throw new Error("Exchange identity does not match the Question Permit.");
+  }
+  return { permit: parsedPermit, identity: parsedIdentity };
+}
+
+function sameIdentity(left: ExchangeIdentity, right: ExchangeIdentity): boolean {
+  return left.kind === right.kind
+    && left.exchangeId === right.exchangeId
+    && left.promptId === right.promptId
+    && left.permitId === right.permitId
+    && left.cancelEpoch === right.cancelEpoch;
 }
 
 function sameApproval(left: LookaheadApproval, right: LookaheadApproval): boolean {
