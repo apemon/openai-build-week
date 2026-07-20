@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { parseBrainTimeoutMs } from "@/agents/brain/runtime-config";
 
 const serverEnvSchema = z.object({
   OPENAI_API_KEY: z.string().min(1).optional(),
@@ -14,6 +15,7 @@ export function getServerEnv() {
   const parsed = serverEnvSchema.parse(process.env);
   return {
     ...parsed,
+    OPENAI_BRAIN_TIMEOUT_MS: parseBrainTimeoutMs(process.env.OPENAI_BRAIN_TIMEOUT_MS),
     liveConfigured: parsed.LIVE_AI_ENABLED === "true" && Boolean(parsed.OPENAI_API_KEY),
   } as const;
 }

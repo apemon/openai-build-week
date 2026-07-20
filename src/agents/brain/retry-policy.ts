@@ -1,5 +1,7 @@
 import type { ApiError } from "@/domain/types";
 
+import { DEFAULT_BRAIN_TIMEOUT_MS } from "./runtime-config";
+
 export type BrainErrorCode = ApiError["error"]["code"];
 
 export class BrainRunError extends Error {
@@ -14,7 +16,8 @@ export class BrainRunError extends Error {
   }
 }
 
-export const BRAIN_TIMEOUT_MS = 30_000;
+export const BRAIN_TIMEOUT_MS = DEFAULT_BRAIN_TIMEOUT_MS;
+export const BRAIN_POLL_INTERVAL_MS = 2_000;
 
 export function compactValidationErrors(errors: readonly string[]): string[] {
   return errors.slice(0, 12).map((error) => error.replace(/\s+/g, " ").slice(0, 240));

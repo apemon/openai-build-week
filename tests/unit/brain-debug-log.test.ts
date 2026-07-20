@@ -22,6 +22,8 @@ describe("Brain submission debug log", () => {
       baseRevision: 0,
       turnCount: 1,
       requestedModel: "gpt-5.6",
+      timeoutMs: 120_000,
+      executionMode: "background",
     });
 
     expect(info).not.toHaveBeenCalled();
@@ -38,6 +40,8 @@ describe("Brain submission debug log", () => {
       baseRevision: 3,
       turnCount: 4,
       requestedModel: "gpt-5.6",
+      timeoutMs: 120_000,
+      executionMode: "background",
       elapsedMs: 30_001,
       errorCode: "MODEL_TIMEOUT",
       retryable: true,
@@ -54,6 +58,8 @@ describe("Brain submission debug log", () => {
       baseRevision: 3,
       turnCount: 4,
       requestedModel: "gpt-5.6",
+      timeoutMs: 120_000,
+      executionMode: "background",
       elapsedMs: 30_001,
       errorCode: "MODEL_TIMEOUT",
       retryable: true,
@@ -64,6 +70,7 @@ describe("Brain submission debug log", () => {
         "baseRevision",
         "elapsedMs",
         "errorCode",
+        "executionMode",
         "event",
         "operation",
         "requestId",
@@ -71,6 +78,7 @@ describe("Brain submission debug log", () => {
         "retryable",
         "status",
         "timestamp",
+        "timeoutMs",
         "turnCount",
       ].sort(),
     );

@@ -3,12 +3,14 @@ import { NextResponse } from "next/server";
 import { logBrainSubmission } from "@/agents/brain/debug-log";
 import { BrainRunError } from "@/agents/brain/retry-policy";
 import { runBrain } from "@/agents/brain/run-brain";
+import { parseBrainTimeoutMs } from "@/agents/brain/runtime-config";
 import { validateBrainRequest } from "@/agents/brain/semantic-validator";
 import { brainRequestSchema } from "@/domain/schemas";
 import type { ApiError } from "@/domain/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 const MAX_BODY_BYTES = 1_000_000;
 
@@ -104,6 +106,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const requestedModel = process.env.OPENAI_BRAIN_MODEL ?? "gpt-5.6";
+  const timeoutMs = parseBrainTimeoutMs(process.env.OPENAI_BRAIN_TIMEOUT_MS);
   const startedAt = Date.now();
   const logContext = {
     requestId,
@@ -111,11 +114,16 @@ export async function POST(request: Request): Promise<NextResponse> {
     baseRevision: parsed.data.baseRevision,
     turnCount: parsed.data.turns.length,
     requestedModel,
+    timeoutMs,
+    executionMode: "background" as const,
   } as const;
   logBrainSubmission({ event: "submitted", ...logContext });
 
   try {
-    const response = await runBrain(parsed.data);
+    const response = await runBrain(parsed.data, {
+      timeoutMs,
+      signal: request.signal,
+    });
     logBrainSubmission({
       event: "succeeded",
       ...logContext,

@@ -17,9 +17,11 @@ The browser owns the revisioned Interview Session, reducer transitions, short-li
 
 The runtime model boundary is fixed:
 
-- Brain: `gpt-5.6`, medium reasoning, Responses API Structured Outputs, complete confirmed state, and `store: false`.
+- Brain: `gpt-5.6`, medium reasoning, Responses API Structured Outputs, complete confirmed state, `background: true`, and `store: false`.
 - Communicator: `gpt-realtime-2.1` over native WebRTC, with semantic VAD configured with `create_response: false`.
 - Transcription: `gpt-4o-transcribe`, producing an editable Answer Draft.
+
+Each Brain attempt creates one background Response, then polls while its provider status is `queued` or `in_progress`. The application timeout defaults to 120 seconds and can be configured with `OPENAI_BRAIN_TIMEOUT_MS` from 30,000 through the 300,000 millisecond cap. A timeout or aborted request preserves the last valid Specification and triggers best-effort cancellation when a provider response ID is available; cancellation failure does not replace the application timeout result or prove that provider execution stopped.
 
 The application—not either model—owns approval and state mutation. Only `Send to Brain`, `Ctrl/Cmd+Enter`, or explicit deferral/resume actions call `/api/brain`. Responses must pass schema and semantic validation before atomically replacing the Specification. Invalid, stale, refused, incomplete, timed-out, or provider-error results preserve the last valid revision.
 
@@ -45,6 +47,7 @@ Open [http://localhost:3000](http://localhost:3000). With the example configurat
 |---|---|---|
 | `OPENAI_API_KEY` | Server-only standard project key used by Brain and temporary Realtime credential routes | Empty |
 | `OPENAI_BRAIN_MODEL` | Server-only Brain model override | `gpt-5.6` |
+| `OPENAI_BRAIN_TIMEOUT_MS` | Server-only timeout for each background Brain attempt, constrained to 30,000–300,000 milliseconds | `120000` |
 | `OPENAI_REALTIME_MODEL` | Realtime Communicator model | `gpt-realtime-2.1` |
 | `OPENAI_TRANSCRIPTION_MODEL` | Input transcription model | `gpt-4o-transcribe` |
 | `LIVE_AI_ENABLED` | Server-side Live kill switch | `false` |
@@ -102,7 +105,7 @@ Do not put the key in the command history on a shared machine; configure it in `
 4. Change `LIVE_AI_ENABLED` to `true` only for a controlled Live window and redeploy. Turn it back to `false` after the window.
 5. Verify route responses and the browser bundle do not expose the standard key, SDP, transcripts, Specifications, raw audio, or temporary credentials beyond the one credential response that requires them.
 
-Do not claim Zero Data Retention solely because the Brain uses `store: false`; verify the active OpenAI project's data controls separately.
+Do not claim Zero Data Retention solely because the Brain uses `store: false`; verify the active OpenAI project's data controls separately. OpenAI's [background mode documentation](https://developers.openai.com/api/docs/guides/background) states that response data is temporarily stored to disk for roughly ten minutes to support asynchronous execution and polling, including background requests that use `store: false`.
 
 ## Presentation-device voice checklist
 
@@ -126,7 +129,7 @@ Spec Grill does not persist raw audio, original uploads, full extractions, or In
 
 After reload, an interview may continue from the confirmed digest. Deep source lookup requires re-uploading the original file.
 
-Live input is processed by OpenAI under the configured project's data controls. Do not enter confidential or regulated information in this hackathon demo.
+Live input is processed by OpenAI under the configured project's data controls. The Brain sets `store: false`, but background-mode response data is still temporarily stored for roughly ten minutes to enable polling; this provider-side temporary storage is separate from Spec Grill's app-held checkpoint behavior. Do not enter confidential or regulated information in this hackathon demo.
 
 ## Codex contribution record
 

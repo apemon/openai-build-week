@@ -45,26 +45,48 @@ function providerResponse(output: unknown = validFixture) {
     id: "resp_001",
     model: "gpt-5.6-2026-07-01",
     status: "completed",
-    output: [],
-    output_parsed: parsedOutput,
+    output: [
+      {
+        type: "message",
+        content: [
+          {
+            type: "output_text",
+            text: JSON.stringify(parsedOutput),
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function responsesClient(
+  create: (body: unknown, options?: { signal?: AbortSignal }) => Promise<unknown>,
+) {
+  return {
+    create,
+    retrieve: vi.fn(),
+    cancel: vi.fn().mockResolvedValue({ status: "cancelled" }),
   };
 }
 
 describe("runBrain", () => {
   it("uses GPT-5.6 Responses Structured Outputs and returns complete provenance", async () => {
-    const parse = vi.fn().mockResolvedValue(providerResponse());
+    const create = vi.fn().mockResolvedValue(providerResponse());
+    const responses = responsesClient(create);
     const result = await runBrain(request, {
-      responses: { parse },
+      responses,
       now: () => new Date("2026-07-20T01:00:00.000Z"),
     });
 
-    expect(parse).toHaveBeenCalledTimes(1);
-    expect(parse.mock.calls[0][0]).toMatchObject({
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][0]).toMatchObject({
       model: "gpt-5.6",
       reasoning: { effort: "medium" },
+      background: true,
       store: false,
       text: { format: { type: "json_schema" } },
     });
+    expect(responses.retrieve).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       requestId: "REQUEST-001",
       baseRevision: 4,
@@ -78,97 +100,216 @@ describe("runBrain", () => {
     });
   });
 
+  it("polls queued and in-progress background responses until completion", async () => {
+    const create = vi.fn().mockResolvedValue({ id: "resp_001", status: "queued", output: [] });
+    const retrieve = vi
+      .fn()
+      .mockResolvedValueOnce({ id: "resp_001", status: "in_progress", output: [] })
+      .mockResolvedValueOnce(providerResponse());
+    const responses = {
+      create,
+      retrieve,
+      cancel: vi.fn().mockResolvedValue({ status: "cancelled" }),
+    };
+
+    await runBrain(request, { responses, pollIntervalMs: 0 });
+
+    expect(retrieve).toHaveBeenCalledTimes(2);
+    expect(retrieve).toHaveBeenNthCalledWith(
+      1,
+      "resp_001",
+      undefined,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(responses.cancel).not.toHaveBeenCalled();
+  });
+
   it("makes exactly one repair attempt after semantic rejection", async () => {
     const invalid = brainModelOutputSchema.parse(structuredClone(validFixture));
     invalid.nextPrompt!.detailedQuestion = "Who pays? Who cancels?";
-    const parse = vi
+    const create = vi
       .fn()
       .mockResolvedValueOnce(providerResponse(invalid))
       .mockResolvedValueOnce(providerResponse());
 
-    const result = await runBrain(request, { responses: { parse } });
+    const result = await runBrain(request, { responses: responsesClient(create) });
 
-    expect(parse).toHaveBeenCalledTimes(2);
-    expect(parse.mock.calls[1][0].input[1].content).toContain("Validation errors");
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls[1][0].input[1].content).toContain("Validation errors");
+    expect(result.provenance.repairAttempted).toBe(true);
+  });
+
+  it("makes exactly one repair attempt after structured output parsing fails", async () => {
+    const malformedResponse = providerResponse();
+    malformedResponse.output[0].content[0].text = "{";
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce(malformedResponse)
+      .mockResolvedValueOnce(providerResponse());
+
+    const result = await runBrain(request, { responses: responsesClient(create) });
+
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls[1][0].input[1].content).toContain("Structured output parsing failed.");
     expect(result.provenance.repairAttempted).toBe(true);
   });
 
   it("returns a typed error after a second invalid response", async () => {
     const invalid = brainModelOutputSchema.parse(structuredClone(validFixture));
     invalid.nextPrompt!.spokenQuestion = "Who pays? Who cancels?";
-    const parse = vi.fn().mockResolvedValue(providerResponse(invalid));
+    const create = vi.fn().mockResolvedValue(providerResponse(invalid));
 
-    await expect(runBrain(request, { responses: { parse } })).rejects.toMatchObject({
+    await expect(runBrain(request, { responses: responsesClient(create) })).rejects.toMatchObject({
       code: "INVALID_MODEL_OUTPUT",
       retryable: true,
     });
-    expect(parse).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenCalledTimes(2);
   });
 
   it("maps repeated refusals without exposing refusal text", async () => {
-    const parse = vi.fn().mockResolvedValue(refusalFixture);
+    const create = vi.fn().mockResolvedValue(refusalFixture);
 
-    await expect(runBrain(request, { responses: { parse } })).rejects.toEqual(
+    await expect(runBrain(request, { responses: responsesClient(create) })).rejects.toEqual(
       expect.objectContaining<Partial<BrainRunError>>({
         code: "MODEL_REFUSAL",
         message: "The Brain refused the request.",
       }),
     );
-    expect(parse).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenCalledTimes(2);
   });
 
   it("maps provider rate limiting", async () => {
-    const parse = vi.fn().mockRejectedValue({ status: 429 });
+    const create = vi.fn().mockRejectedValue({ status: 429 });
 
-    await expect(runBrain(request, { responses: { parse } })).rejects.toMatchObject({
+    await expect(runBrain(request, { responses: responsesClient(create) })).rejects.toMatchObject({
       code: "RATE_LIMITED",
       retryable: true,
     });
-    expect(parse).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   it("aborts and maps an application timeout", async () => {
-    const parse = vi.fn((_body: unknown, options?: { signal?: AbortSignal }) => {
+    const create = vi.fn().mockResolvedValue({ id: "resp_timeout", status: "queued", output: [] });
+    const retrieve = vi.fn((_id: string, _query?: unknown, options?: { signal?: AbortSignal }) => {
       return new Promise((_resolve, reject) => {
         options?.signal?.addEventListener("abort", () => {
           reject(new DOMException("aborted", "AbortError"));
         });
       });
     });
+    let cancelFinished = false;
+    const cancel = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      cancelFinished = true;
+      return { status: "cancelled" };
+    });
 
-    await expect(runBrain(request, { responses: { parse }, timeoutMs: 1 })).rejects.toMatchObject({
+    await expect(
+      runBrain(request, {
+        responses: { create, retrieve, cancel },
+        timeoutMs: 1,
+        pollIntervalMs: 0,
+      }),
+    ).rejects.toMatchObject({
       code: "MODEL_TIMEOUT",
       retryable: true,
     });
-    expect(parse).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(cancel).toHaveBeenCalledWith(
+      "resp_timeout",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(cancelFinished).toBe(true);
   });
 
   it("uses the application abort signal when the SDK rejection shape is unknown", async () => {
-    const parse = vi.fn((_body: unknown, options?: { signal?: AbortSignal }) => {
+    const create = vi.fn().mockResolvedValue({ id: "resp_timeout", status: "queued", output: [] });
+    const retrieve = vi.fn((_id: string, _query?: unknown, options?: { signal?: AbortSignal }) => {
       return new Promise((_resolve, reject) => {
         options?.signal?.addEventListener("abort", () => {
           reject(new Error("opaque SDK wrapper"));
         });
       });
     });
+    const cancel = vi.fn().mockRejectedValue(new Error("cancel failed"));
 
-    await expect(runBrain(request, { responses: { parse }, timeoutMs: 1 })).rejects.toMatchObject({
+    await expect(
+      runBrain(request, {
+        responses: { create, retrieve, cancel },
+        timeoutMs: 1,
+        pollIntervalMs: 0,
+      }),
+    ).rejects.toMatchObject({
       code: "MODEL_TIMEOUT",
       retryable: true,
     });
-    expect(parse).toHaveBeenCalledTimes(1);
+    expect(cancel).toHaveBeenCalledWith(
+      "resp_timeout",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("cancels known provider work when the caller aborts", async () => {
+    const externalController = new AbortController();
+    const create = vi.fn().mockResolvedValue({ id: "resp_abandoned", status: "queued", output: [] });
+    const retrieve = vi.fn((_id: string, _query?: unknown, options?: { signal?: AbortSignal }) => {
+      return new Promise((_resolve, reject) => {
+        options?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("aborted", "AbortError"));
+        });
+        externalController.abort();
+      });
+    });
+    let cancelFinished = false;
+    const cancel = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      cancelFinished = true;
+      return { status: "cancelled" };
+    });
+
+    await expect(
+      runBrain(request, {
+        responses: { create, retrieve, cancel },
+        signal: externalController.signal,
+        pollIntervalMs: 0,
+      }),
+    ).rejects.toMatchObject({ code: "MODEL_TIMEOUT", retryable: true });
+    expect(cancel).toHaveBeenCalledWith(
+      "resp_abandoned",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(cancelFinished).toBe(true);
+  });
+
+  it("does not cancel when the application times out before receiving a response ID", async () => {
+    const create = vi.fn((_body: unknown, options?: { signal?: AbortSignal }) => {
+      return new Promise((_resolve, reject) => {
+        options?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("aborted", "AbortError"));
+        });
+      });
+    });
+    const responses = responsesClient(create);
+
+    await expect(runBrain(request, { responses, timeoutMs: 1 })).rejects.toMatchObject({
+      code: "MODEL_TIMEOUT",
+      retryable: true,
+    });
+    expect(responses.cancel).not.toHaveBeenCalled();
   });
 
   it("rejects Live requests with Prepared Demo provenance before any provider call", async () => {
-    const parse = vi.fn();
+    const create = vi.fn();
     const invalidRequest = structuredClone(request);
     invalidRequest.confirmedContextDigest.sources[0].kind = "prepared_sample";
 
-    await expect(runBrain(invalidRequest, { responses: { parse } })).rejects.toMatchObject({
+    await expect(runBrain(invalidRequest, { responses: responsesClient(create) })).rejects.toMatchObject({
       code: "INVALID_REQUEST",
       retryable: false,
     });
-    expect(parse).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("maps an SDK connection wrapper with a nested abort as a timeout", async () => {
@@ -179,12 +320,14 @@ describe("runBrain", () => {
       name: "APIConnectionError",
       cause: nestedAbort,
     });
-    const parse = vi.fn().mockRejectedValue(wrapped);
+    const create = vi.fn().mockRejectedValue(wrapped);
 
-    await expect(runBrain(request, { responses: { parse }, timeoutMs: 10 })).rejects.toMatchObject({
+    await expect(
+      runBrain(request, { responses: responsesClient(create), timeoutMs: 10 }),
+    ).rejects.toMatchObject({
       code: "MODEL_TIMEOUT",
       retryable: true,
     });
-    expect(parse).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(1);
   });
 });

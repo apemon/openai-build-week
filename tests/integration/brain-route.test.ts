@@ -6,6 +6,7 @@ import { createEmptyQuestionRoadmap, createInitialContextDigest, emptySpecificat
 const originalEnvironment = {
   LIVE_AI_ENABLED: process.env.LIVE_AI_ENABLED,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  OPENAI_BRAIN_TIMEOUT_MS: process.env.OPENAI_BRAIN_TIMEOUT_MS,
   ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN,
 };
 

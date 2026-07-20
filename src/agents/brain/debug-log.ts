@@ -7,6 +7,8 @@ type BrainSubmissionBase = {
   baseRevision: number;
   turnCount: number;
   requestedModel: string;
+  timeoutMs: number;
+  executionMode: "background";
 };
 
 type BrainSubmissionEvent =
