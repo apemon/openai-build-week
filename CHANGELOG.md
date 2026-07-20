@@ -16,6 +16,12 @@
 
 The complete approved handoff and acceptance criteria are in `V2_IMPLEMENTATION_HANDOFF.md`.
 
+## V2 feedback and future exploration
+
+- Observed Brain latency still leaves users waiting, and the current progress feedback needs a visible loader or clearer active status so users can distinguish running work from a hung or failed request.
+- **Future exploration — asynchronous interview:** investigate whether the Communicator could keep a bounded conversation moving through multiple questions while Brain work runs. This is not delivered V2 behavior: V2 still permits exactly one Brain-approved, dependency-independent Lookahead Question and preserves explicit confirmation, dependency revalidation, and Brain-only Specification authority.
+- **Future exploration — Codex harness:** observed Brain output quality was weaker than Codex output, so a Codex harness layer should be evaluated for the next version. No Codex runtime or harness is part of delivered V2.
+
 ## V1 delivered features and workflow
 
 ### Features
