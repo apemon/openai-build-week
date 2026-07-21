@@ -4,11 +4,13 @@ Automated tests use mocked provider boundaries, fake media, deterministic Prepar
 
 ## Presentation-device voice
 
-- [ ] Live starts only after explicit microphone enablement and browser permission.
+Manual pass recorded 2026-07-21 from the Product Manager's local desktop Chrome session (browser version and workstation model not supplied; evidence is the user report in the active implementation session).
+
+- [x] Live starts only after explicit microphone enablement and browser permission.
 - [ ] Prompt playback disables capture; playback completion enables listening.
 - [ ] `Answer now` stops playback and starts listening without Brain submission.
 - [ ] Semantic VAD tolerates representative pauses and background noise.
-- [ ] Final transcription becomes an editable Answer Draft and recording alone sends nothing.
+- [x] Final transcription becomes an editable Answer Draft and recording alone sends nothing.
 - [ ] Mid-speech revision preserves local transcription behind Revalidation Pending.
 - [ ] Changed/stale permits disable confirmation and preserve copyable Not Applied wording.
 - [ ] Pause/resume, reconnect, record again, mute, and Live text fallback preserve confirmed state.
@@ -19,7 +21,7 @@ Automated tests use mocked provider boundaries, fake media, deterministic Prepar
 
 - [x] Dedicated capped OpenAI project configured server-side; Live explicitly enabled for the 2026-07-21 local smoke.
 - [x] Ordinary Live used `one_shot`, requested `gpt-5.6`, actual `gpt-5.6-sol`, medium reasoning, Structured Outputs, `background: true`, and `store: false` in the 2026-07-21 local smoke.
-- [ ] No input reaches `/api/brain` before the required Product Manager confirmation.
+- [x] No input reached `/api/brain` before Product Manager confirmation in the manually reported microphone flow.
 - [ ] Persistent status appears immediately and each visible stage maps to a validated lifecycle event.
 - [ ] A representative action stays connected beyond 30 seconds and shows `Taking longer than usual` without timer reset across repair.
 - [ ] Ten seconds of lifecycle silence shows `Needs attention` and stops healthy animation.
@@ -49,7 +51,7 @@ Automated tests use mocked provider boundaries, fake media, deterministic Prepar
 
 - Automated mocks/fixtures: verified by the repository test commands.
 - Live OpenAI Brain: one local confirmed-snapshot NDJSON smoke passed on 2026-07-21 (revision 1, one bounded repair, 30 lifecycle events); Realtime session issuance returned 200 with the secret-bearing body discarded.
-- Physical microphone/playback: not verified in this delivery.
+- Physical microphone: the basic Chrome permission → spoken turn → editable Answer Draft flow passed by Product Manager report on 2026-07-21. Prompt playback/capture coordination, echo, noise, reconnect, pause, and mid-speech revision cases remain unchecked above.
 - Deployment and target-host stream duration: not verified in this delivery.
 - Provider retention/ZDR: not verified in this delivery.
 - Live Codex/public-search bake-off and human scoring: not performed.

@@ -46,7 +46,7 @@ describe("background Brain contract verification", () => {
     expect(readme).toMatch(/temporarily stored[\s\S]{0,100}roughly ten minutes/);
     expect(readme).toContain("Automated verification uses mocked provider boundaries");
     expect(readme).toContain("opt-in local smoke validated a live requested `gpt-5.6`");
-    expect(readme).toContain("Physical microphone/WebRTC media behavior, deployment, and provider-retention verification are not claimed");
+    expect(readme).toContain("Advanced voice/media races, deployment, and provider-retention verification are not claimed");
   });
 
   it("keeps HTTPS evidence validation without emitting an unsupported uri format", () => {
