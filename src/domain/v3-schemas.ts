@@ -41,7 +41,14 @@ export const v3BrainOperationSchema = z.enum([
   "revalidate_restored",
 ]);
 
-export const brainHarnessModeSchema = z.enum(["one_shot", "responses_native", "codex_ephemeral"]);
+export const brainHarnessModeSchema = z.enum([
+  "one_shot",
+  "responses_native",
+  "codex_ephemeral",
+  "codex_sdk_persistent",
+]);
+
+export const codexThreadIdSchema = z.string().trim().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/);
 
 export const externalEvidenceTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("specification_item"), itemId: entityId }).strict(),
@@ -350,6 +357,7 @@ export const v3BrainRequestSchema = brainRequestSchema
     restoredEntriesForRevalidation: z.array(restoredAsyncEntrySchema).max(3),
     decisionBatch: decisionBatchSchema.nullable(),
     externalEvidenceBundle: z.array(frozenExternalEvidenceSchema).max(20),
+    codexThreadId: codexThreadIdSchema.nullable().optional(),
   })
   .strict()
   .superRefine((request, context) => {
@@ -392,6 +400,7 @@ export const v3BrainResponseSchema = brainResponseSchema
   .extend({
     provenance: z.union([brainResponseSchema.shape.provenance, experimentalBrainProvenanceSchema]),
     output: v3BrainModelOutputSchema,
+    codexThreadId: codexThreadIdSchema.nullable().optional(),
   })
   .strict();
 
@@ -460,6 +469,7 @@ export const v3CheckpointSchema = z
     }),
     confirmedQueuedEntries: z.array(restoredAsyncEntrySchema).max(3),
     adaptiveWindow: adaptiveWindowStateSchema,
+    codexThreadId: codexThreadIdSchema.nullable().optional(),
   })
   .strict();
 

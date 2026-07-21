@@ -13,8 +13,16 @@ A person or group outside the MVP Interview Session whose authority or expertise
 _Avoid_: User, attendee, approver
 
 **Interview Session**:
-One ephemeral browser session in which a Product Manager answers the AI interviewer and develops a single specification. It is not a shared or persistent meeting room in the MVP.
+One time-bounded browser session in which a Product Manager answers the AI interviewer and develops a single Specification. In hackathon Live Mode it may be bound to one locally persisted Codex Brain Session, but it is not a shared meeting room.
 _Avoid_: Meeting, call, workspace
+
+**Codex Brain Session**:
+The locally persisted Codex SDK thread used by the hackathon Live Brain across confirmed submissions. Its memory is supporting context; only a validated complete Brain revision may replace the browser's Specification.
+_Avoid_: Database, source of truth, shared workspace
+
+**Session Link**:
+A local URL that identifies one Codex Brain Session and its matching unexpired browser checkpoint. It is a same-machine hackathon resume aid, not an authenticated, cross-device, or durable sharing link.
+_Avoid_: Share link, collaboration link, permanent URL
 
 **Live Mode**:
 An Interview Session driven by the Product Manager's real input and genuine AI service calls. Its outputs are identified as live AI results.
@@ -45,7 +53,7 @@ A Product Manager-confirmed challenge to an existing Specification statement tha
 _Avoid_: Inline edit, patch, Communicator correction
 
 **Session Data**:
-The transient audio, conversation, context, Decision Tray, and Specification information used within one Interview Session. Spec Grill does not persist it to a database or retain raw audio; only confirmed revisions, the bounded confirmed Project Context Digest, and at most three confirmed queued asynchronous decisions may be checkpointed temporarily in the browser tab, and Reset, finalized exit, or expiry removes app-held state.
+The audio, conversation, context, Decision Tray, and Specification information used within one Interview Session. Spec Grill does not persist it to a database or retain raw audio; the hackathon Live path may retain confirmed Brain inputs and outputs inside its local Codex Brain Session, while the browser checkpoints only validated confirmed state and bounded queued decisions until Reset, finalized exit, or expiry.
 _Avoid_: Account data, saved project, recording archive
 
 **Interview Prompt**:

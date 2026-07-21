@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:codex": "OPENAI_BRAIN_HARNESS=codex_sdk_persistent BRAIN_EXPERIMENTAL_HARNESSES_ENABLED=true BRAIN_PUBLIC_SEARCH_ENABLED=false next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -16,6 +17,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "latest",
+    "@openai/codex-sdk": "^0.144.6",
     "mammoth": "^1.12.0",
     "next": "^16.2.10",
     "openai": "^6.48.0",

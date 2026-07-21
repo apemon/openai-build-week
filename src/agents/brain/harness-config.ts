@@ -16,7 +16,11 @@ export function readBrainHarnessConfiguration(
     throw new BrainRunError("INVALID_REQUEST", "The configured Brain harness is invalid.", false);
   }
   const publicSearchEnabled = environment.BRAIN_PUBLIC_SEARCH_ENABLED === "true";
-  if (surface === "live_route" && parsedMode.data !== "one_shot") {
+  if (
+    surface === "live_route"
+    && parsedMode.data !== "one_shot"
+    && parsedMode.data !== "codex_sdk_persistent"
+  ) {
     throw new BrainRunError("INVALID_REQUEST", "Experimental harnesses are unavailable on the ordinary Live route.", false);
   }
   if (publicSearchEnabled && (surface !== "local_evaluation" || parsedMode.data !== "codex_ephemeral")) {

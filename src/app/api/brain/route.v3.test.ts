@@ -1,3 +1,7 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { validV3BrainOutput, validV3BrainRequest } from "@/agents/brain/v3-test-fixtures";
@@ -8,9 +12,26 @@ const provider = vi.hoisted(() => ({
   cancel: vi.fn(),
 }));
 
+const codexSdk = vi.hoisted(() => ({
+  startThread: vi.fn(),
+  resumeThread: vi.fn(),
+}));
+
 vi.mock("openai", () => ({
   default: class MockOpenAI {
     responses = provider;
+  },
+}));
+
+vi.mock("@openai/codex-sdk", () => ({
+  Codex: class MockCodex {
+    startThread(options: unknown) {
+      return codexSdk.startThread(options);
+    }
+
+    resumeThread(id: string, options: unknown) {
+      return codexSdk.resumeThread(id, options);
+    }
   },
 }));
 
@@ -100,5 +121,64 @@ describe("V3 streamed Brain route", () => {
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "INVALID_REQUEST" } });
     expect(provider.create).not.toHaveBeenCalled();
+  });
+
+  it("streams persistent Codex through the existing route only when experimentally enabled", async () => {
+    const storageRoot = await mkdtemp(join(tmpdir(), "spec-grill-route-codex-"));
+    process.env.LIVE_AI_ENABLED = "true";
+    process.env.OPENAI_API_KEY = "test-only-key";
+    process.env.ALLOWED_ORIGIN = "http://localhost:3000";
+    process.env.OPENAI_BRAIN_HARNESS = "codex_sdk_persistent";
+    process.env.BRAIN_EXPERIMENTAL_HARNESSES_ENABLED = "true";
+    process.env.CODEX_BRAIN_HOME = storageRoot;
+    const thread = {
+      id: null as string | null,
+      async runStreamed() {
+        return {
+          events: (async function* () {
+            thread.id = "THREAD-ROUTE-001";
+            yield { type: "thread.started", thread_id: thread.id };
+            yield { type: "turn.started" };
+            yield {
+              type: "item.completed",
+              item: { type: "agent_message", text: JSON.stringify(validV3BrainOutput()) },
+            };
+            yield { type: "turn.completed", usage: null };
+          })(),
+        };
+      },
+    };
+    codexSdk.startThread.mockReturnValue(thread);
+
+    try {
+      const response = await POST(liveRequest());
+      expect(response.status).toBe(200);
+      const envelopes = (await response.text()).trim().split("\n").map((line) => JSON.parse(line));
+      expect(envelopes.map((envelope) => envelope.type)).toEqual([
+        "lifecycle",
+        "lifecycle",
+        "lifecycle",
+        "lifecycle",
+        "result",
+      ]);
+      expect(envelopes.at(-1)).toMatchObject({
+        type: "result",
+        response: {
+          codexThreadId: "THREAD-ROUTE-001",
+          provenance: {
+            source: "live_ai",
+            requestedModel: "gpt-5.6-sol",
+            actualModel: "gpt-5.6-sol:unverified",
+          },
+        },
+      });
+      expect(codexSdk.startThread).toHaveBeenCalledWith(expect.objectContaining({
+        sandboxMode: "read-only",
+        webSearchMode: "disabled",
+      }));
+      expect(provider.create).not.toHaveBeenCalled();
+    } finally {
+      await rm(storageRoot, { recursive: true, force: true });
+    }
   });
 });

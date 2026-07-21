@@ -33,4 +33,20 @@ describe("Brain harness server configuration", () => {
       BRAIN_EXPERIMENTAL_HARNESSES_ENABLED: "true",
     } as NodeJS.ProcessEnv)).toThrow(/ordinary Live route/);
   });
+
+  it("allows persistent Codex on the ordinary Live route only behind the experimental flag", () => {
+    expect(() => readBrainHarnessConfiguration("live_route", {
+      NODE_ENV: "test",
+      OPENAI_BRAIN_HARNESS: "codex_sdk_persistent",
+    } as NodeJS.ProcessEnv)).toThrow(/disabled/);
+
+    expect(readBrainHarnessConfiguration("live_route", {
+      NODE_ENV: "test",
+      OPENAI_BRAIN_HARNESS: "codex_sdk_persistent",
+      BRAIN_EXPERIMENTAL_HARNESSES_ENABLED: "true",
+    } as NodeJS.ProcessEnv)).toEqual({
+      mode: "codex_sdk_persistent",
+      publicSearchEnabled: false,
+    });
+  });
 });

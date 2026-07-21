@@ -5,6 +5,7 @@ import { logBrainSubmission } from "./debug-log";
 import { BRAIN_TIMEOUT_MS, BrainRunError, mapProviderError } from "./retry-policy";
 import { runV3Brain, type V3BrainRunnerOptions } from "./run-v3-brain";
 import type { BrainHarnessConfiguration } from "./harness-config";
+import { CodexSdkBrainHarness } from "./codex-sdk-harness";
 import { runResponsesNativeBrain } from "./responses-native";
 
 class AsyncEventQueue<T> {
@@ -163,5 +164,13 @@ export function createLiveBrainHarness(
       return new ResponsesNativeBrainHarness(options);
     case "codex_ephemeral":
       throw new BrainRunError("INVALID_REQUEST", "codex_ephemeral is unavailable on the ordinary Live route.", false);
+    case "codex_sdk_persistent":
+      return new CodexSdkBrainHarness({
+        apiKey: process.env.OPENAI_API_KEY ?? "",
+        model: process.env.OPENAI_CODEX_BRAIN_MODEL ?? "gpt-5.6-sol",
+        timeoutMs: options.timeoutMs,
+        storageRoot: process.env.CODEX_BRAIN_HOME,
+        now: options.now,
+      });
   }
 }
