@@ -1,5 +1,15 @@
 # Changelog
 
+## Local persistent Codex Brain hackathon extension
+
+- Added an opt-in `codex_sdk_persistent` Live Brain behind `BRAIN_EXPERIMENTAL_HARNESSES_ENABLED=true`, using the existing `/api/brain` NDJSON route and server-side OpenAI credential boundary.
+- Added one locally persisted Codex thread per Live session, validated terminal thread identity, one active turn per thread, bounded repair, process-local quarantine after interrupted or terminally invalid work, and a matching browser-checkpoint thread binding.
+- Added a local Session Link that resumes only when the same machine retains the Codex session store and the same browser tab retains the matching unexpired checkpoint. It is not authenticated sharing, cross-browser/device resume, cross-instance durability, or database persistence.
+- Runs Codex with read-only filesystem access, a fresh empty temporary working directory, isolated home/session directories, network and public search disabled, no approvals, and validated structured output. Per-turn workspaces are removed; the configured local session store remains until the operator deletes it.
+- Keeps `one_shot` as the safe default and Prepared Demo fully isolated. No database, KV store, account system, separate service, or Prepared-to-Live data path was added.
+- Makes no `store:false`, Zero Data Retention, provider-cancellation, provider thread-deletion, hosted durability, production readiness, or production privacy claim for persistent Codex threads.
+- Documented exact local configuration, a dedicated `dev:codex` command, limits, and cleanup. The opt-in content-free smoke validates two requests on the same resumed thread without printing the API key, thread ID, prompt, transcript, or Specification.
+
 ## V3 delivered extension
 
 - Added Bounded Async Interview Windows with zero to three Brain-issued pairwise-independent permits while preserving one active question and one authoritative Brain request.
@@ -7,7 +17,7 @@
 - Replaced the terminal Brain JSON body with strict NDJSON lifecycle/result/error streaming and Persistent Brain Status, including 30-second taking-longer, 10-second unverifiable-activity, interrupted-stream, explicit-retry, and reduced-motion behavior.
 - Expanded checkpoints to at most three confirmed queued entries plus the content-free adaptive tuple. Reload never auto-submits and exposes separate revalidation and submission gates.
 - Added exchange/permit/cancellation identity enforcement, bounded provider-event deduplication, and mid-turn revalidation protection for Realtime work.
-- Added External Evidence contracts/rendering/export plus disabled-by-default `one_shot`, `responses_native`, and local `codex_ephemeral` evaluation surfaces. Ordinary Live is fixed to `one_shot`; public search remains rejected because enforceable query/source caps are unavailable.
+- Added External Evidence contracts/rendering/export plus disabled-by-default `one_shot`, `responses_native`, and local `codex_ephemeral` evaluation surfaces. The V3 safe/default Live adapter is `one_shot`; ADR-0011 later added the separately flagged local persistent exception. Public search remains rejected because enforceable query/source caps are unavailable.
 - Added 24 synthetic evaluation fixtures, frozen rubrics/gates, gitignored artifact output, and secret/content sentinels. No live bake-off, human scoring, or adapter promotion was performed.
 - Extended Prepared Demo with a two-permit user-paced fixture clock, two sequential individual confirmations, revision-first revalidation, one dependency-invalidated Not Applied outcome, one automatic one-entry batch, and no OpenAI/Codex/search/microphone/user-file/API dependency.
 - Added independent NDJSON privacy, batch atomicity, checkpoint/reload, 390 px, axe, Prepared isolation, and V1/V2 regression verification.
