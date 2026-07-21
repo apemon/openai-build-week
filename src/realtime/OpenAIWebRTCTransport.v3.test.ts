@@ -218,6 +218,181 @@ describe("OpenAIWebRTCTransport V3 identity safety", () => {
       providerEventId: "summary-text",
     });
   });
+
+  it("assesses authoritative Answer Intake with exact aspect membership and separate clarification audio", async () => {
+    const dataChannel = new FakeDataChannel();
+    const microphoneTrack = {
+      enabled: false,
+      readyState: "live",
+      stop: vi.fn(),
+    } as unknown as MediaStreamTrack;
+    const transport = new OpenAIWebRTCTransport({
+      createPeerConnection: () => createPeerConnection(dataChannel),
+      getUserMedia: vi.fn().mockResolvedValue({
+        getAudioTracks: () => [microphoneTrack],
+        getTracks: () => [microphoneTrack],
+      } as unknown as MediaStream),
+      fetch: vi.fn().mockResolvedValue(new Response("answer-sdp", { status: 200 })),
+      createAudioElement: () => ({
+        autoplay: false,
+        srcObject: null,
+        setAttribute: vi.fn(),
+        play: vi.fn().mockResolvedValue(undefined),
+        pause: vi.fn(),
+      }) as unknown as HTMLAudioElement,
+    });
+    const v3Listener = vi.fn();
+    const baseListener = vi.fn();
+    transport.subscribeV3(v3Listener);
+    transport.subscribe(baseListener);
+    await transport.connect({
+      sessionId: "SESSION-ANSWER",
+      clientSecret: "temporary-test-value",
+      realtimeModel: "gpt-realtime-2.1",
+    });
+    dataChannel.emitProviderEvent({
+      event_id: "answer-session",
+      type: "session.created",
+      session: createLockedRealtimeSession(),
+    });
+    const answerIdentity: ExchangeIdentity = {
+      kind: "authoritative_or_app_prompt",
+      exchangeId: "EXCHANGE-ANSWER",
+      promptId: initialInterviewPrompt.id,
+      permitId: null,
+      cancelEpoch: 1,
+    };
+    transport.beginAuthoritativeAnswer(initialInterviewPrompt, answerIdentity);
+    const promptRequest = lastResponseCreate(dataChannel);
+    completeAudio(dataChannel, "answer-prompt", promptRequest.response.metadata);
+    expect(transport.getMicrophoneState()).toBe("listening");
+
+    transport.submitAnswerIntakeContribution("Build a focused interview.", answerIdentity);
+    const assessmentRequest = lastResponseCreate(dataChannel);
+    expect(assessmentRequest.response).toMatchObject({
+      conversation: "none",
+      metadata: {
+        purpose: "answer_intake_assessment",
+        exchangeId: "EXCHANGE-ANSWER",
+        promptId: initialInterviewPrompt.id,
+        permitId: "",
+        cancelEpoch: "1",
+      },
+      output_modalities: ["text"],
+      tools: [],
+    });
+    const assessmentInput = JSON.parse(assessmentRequest.response.input[0].content[0].text);
+    expect(assessmentInput.activeDecision.answerAspects).toEqual(initialInterviewPrompt.answerAspects);
+    expect(assessmentInput.productManagerContributions).toEqual(["Build a focused interview."]);
+    dataChannel.emitProviderEvent({
+      event_id: "assessment-created",
+      type: "response.created",
+      response: { id: "response-assessment", metadata: assessmentRequest.response.metadata },
+    });
+    dataChannel.emitProviderEvent({
+      event_id: "assessment-invalid",
+      type: "response.output_text.done",
+      response_id: "response-assessment",
+      item_id: "assessment-item",
+      output_index: 0,
+      content_index: 0,
+      text: JSON.stringify({
+        summary: "Build a focused interview.",
+        coverage: [{ aspectId: "ASPECT-001", status: "covered" }],
+        uncertainties: [],
+        clarificationQuestion: null,
+        clarificationAspectIds: [],
+      }),
+    });
+    expect(baseListener).toHaveBeenCalledWith({
+      type: "error",
+      code: "INVALID_ANSWER_INTAKE_ASSESSMENT",
+      retryable: true,
+    });
+    expect(v3Listener).not.toHaveBeenCalledWith(expect.objectContaining({ type: "answer_intake_assessed" }));
+
+    transport.submitAnswerIntakeContribution("It should resolve vague product intent.", answerIdentity);
+    const retryRequest = lastResponseCreate(dataChannel);
+    dataChannel.emitProviderEvent({
+      event_id: "assessment-late-from-first-contribution",
+      type: "response.output_text.done",
+      response_id: "response-assessment",
+      item_id: "assessment-late-item",
+      output_index: 0,
+      content_index: 0,
+      text: JSON.stringify({
+        summary: "Late assessment.",
+        coverage: [
+          { aspectId: "ASPECT-001", status: "covered" },
+          { aspectId: "ASPECT-002", status: "covered" },
+        ],
+        uncertainties: [],
+        clarificationQuestion: null,
+        clarificationAspectIds: [],
+      }),
+    });
+    expect(v3Listener).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: "answer_intake_assessed",
+      providerEventId: "assessment-late-from-first-contribution",
+    }));
+    dataChannel.emitProviderEvent({
+      event_id: "assessment-retry-created",
+      type: "response.created",
+      response: { id: "response-assessment-retry", metadata: retryRequest.response.metadata },
+    });
+    const validAssessment = {
+      summary: "Build a focused interview that resolves vague product intent.",
+      coverage: [
+        { aspectId: "ASPECT-001", status: "covered" },
+        { aspectId: "ASPECT-002", status: "missing" },
+      ],
+      uncertainties: ["The current pain needs more detail."],
+      clarificationQuestion: "What current pain should this solve?",
+      clarificationAspectIds: ["ASPECT-002"],
+    };
+    const validAssessmentEvent = {
+      event_id: "assessment-valid",
+      type: "response.output_text.done",
+      response_id: "response-assessment-retry",
+      item_id: "assessment-retry-item",
+      output_index: 0,
+      content_index: 0,
+      text: JSON.stringify(validAssessment),
+    };
+    dataChannel.emitProviderEvent(validAssessmentEvent);
+    dataChannel.emitProviderEvent(validAssessmentEvent);
+    expect(v3Listener).toHaveBeenCalledWith({
+      type: "answer_intake_assessed",
+      assessment: validAssessment,
+      identity: answerIdentity,
+      providerEventId: "assessment-valid",
+    });
+    expect(v3Listener.mock.calls.filter(([event]) => event.type === "answer_intake_assessed")).toHaveLength(1);
+
+    transport.speakAnswerClarification(
+      validAssessment.clarificationQuestion,
+      validAssessment.clarificationAspectIds,
+      answerIdentity,
+    );
+    const clarificationRequest = lastResponseCreate(dataChannel);
+    expect(clarificationRequest.response).toMatchObject({
+      conversation: "none",
+      metadata: { purpose: "answer_clarification", clarificationSequence: "1" },
+      input: [],
+      output_modalities: ["audio"],
+      tools: [],
+    });
+    completeAudio(dataChannel, "answer-clarification", clarificationRequest.response.metadata);
+    expect(v3Listener).toHaveBeenCalledWith(expect.objectContaining({
+      type: "answer_clarification_started",
+      identity: answerIdentity,
+    }));
+    expect(v3Listener).toHaveBeenCalledWith(expect.objectContaining({
+      type: "answer_clarification_done",
+      identity: answerIdentity,
+    }));
+    expect(transport.getMicrophoneState()).toBe("listening");
+  });
 });
 
 function createPeerConnection(dataChannel: FakeDataChannel): RTCPeerConnection {
@@ -237,11 +412,48 @@ function createPeerConnection(dataChannel: FakeDataChannel): RTCPeerConnection {
 
 function lastResponseCreate(dataChannel: FakeDataChannel): {
   type: "response.create";
-  response: { metadata: Record<string, string> };
+  response: {
+    conversation: string;
+    metadata: Record<string, string>;
+    input: Array<{ content: Array<{ text: string }> }>;
+    output_modalities: string[];
+    tools: unknown[];
+  };
 } {
   const value = [...dataChannel.sent].reverse().find((event) => Boolean(
     event && typeof event === "object" && "type" in event && event.type === "response.create",
   ));
   if (!value) throw new Error("Expected response.create.");
-  return value as { type: "response.create"; response: { metadata: Record<string, string> } };
+  return value as {
+    type: "response.create";
+    response: {
+      conversation: string;
+      metadata: Record<string, string>;
+      input: Array<{ content: Array<{ text: string }> }>;
+      output_modalities: string[];
+      tools: unknown[];
+    };
+  };
+}
+
+function completeAudio(
+  dataChannel: FakeDataChannel,
+  responseId: string,
+  metadata: Record<string, string>,
+): void {
+  dataChannel.emitProviderEvent({
+    event_id: `${responseId}-created`,
+    type: "response.created",
+    response: { id: responseId, metadata },
+  });
+  dataChannel.emitProviderEvent({
+    event_id: `${responseId}-started`,
+    type: "output_audio_buffer.started",
+    response_id: responseId,
+  });
+  dataChannel.emitProviderEvent({
+    event_id: `${responseId}-stopped`,
+    type: "output_audio_buffer.stopped",
+    response_id: responseId,
+  });
 }

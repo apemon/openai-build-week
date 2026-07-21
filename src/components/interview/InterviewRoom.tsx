@@ -48,6 +48,8 @@ export interface InterviewRoomProps {
   permittedInterview?: ReactNode;
   decisionTray?: ReactNode;
   sessionLink?: ReactNode;
+  answerIntake?: ReactNode;
+  onReturnToAnswerClarification?: () => void;
 }
 
 export function InterviewRoom(props: InterviewRoomProps) {
@@ -73,9 +75,10 @@ export function InterviewRoom(props: InterviewRoomProps) {
         <section aria-label="Interview interaction" className="space-y-4">
           <div className="rounded-2xl border border-stone-700 bg-stone-900 p-4"><p className="font-semibold">Communicator <span className="font-normal text-stone-400">· {state.mode === "demo" ? "prepared local prompt audio" : "AI voice"}</span></p><p className="mt-1 text-sm text-stone-300">{state.mode === "demo" ? "Presents prevalidated prepared content without AI or microphone access." : "Presents the Brain-approved prompt. It cannot change your Specification."}</p></div>
           {props.permittedInterview}
+          {props.answerIntake}
           {!props.permittedInterview && !activeLookahead && state.currentPrompt && <PromptCard prompt={state.currentPrompt} onDefer={props.onDefer} onAnswerNow={props.onAnswerNow} preparedAudioUnavailable={props.preparedAudioUnavailable} externalEvidence={externalEvidence} />}
           {!props.permittedInterview && activeLookahead && hasLookaheadActions && <LookaheadPanel active={activeLookahead} mode={state.mode} onClarification={props.onClarification!} onRequestSummary={props.onRequestDecisionSummary!} onSummaryChange={props.onDecisionSummaryChange!} onConfirmSummary={props.onConfirmDecisionSummary!} />}
-          {!props.permittedInterview && !activeLookahead && (state.phase === "reviewing_answer" && state.answerDraft ? <AnswerDraftCard draft={state.answerDraft} onChange={props.onEditDraft} onConfirm={props.onConfirmDraft} onRecordAgain={props.onRecordAgain} /> : state.mode === "demo" && props.onUsePreparedAnswer ? <button type="button" onClick={props.onUsePreparedAnswer} className="min-h-11 w-full rounded-xl bg-amber-300 px-5 py-3 font-semibold text-stone-950">Use prepared answer</button> : <TextComposer disabled={state.phase === "analyzing"} onTyping={props.onComposerFocus} onReview={(text) => props.onCreateDraft({ text, source: "typed", promptId: state.currentPrompt?.id ?? null, transcriptionItemId: null })} />)}
+          {!props.permittedInterview && !activeLookahead && !props.answerIntake && (state.phase === "reviewing_answer" && state.answerDraft ? <AnswerDraftCard draft={state.answerDraft} answerAspects={state.currentPrompt?.answerAspects} onChange={props.onEditDraft} onConfirm={props.onConfirmDraft} onRecordAgain={props.onRecordAgain} onReturnToClarification={props.onReturnToAnswerClarification} /> : state.mode === "demo" && props.onUsePreparedAnswer ? <button type="button" onClick={props.onUsePreparedAnswer} className="min-h-11 w-full rounded-xl bg-amber-300 px-5 py-3 font-semibold text-stone-950">Use prepared answer</button> : <TextComposer disabled={state.phase === "analyzing"} onTyping={props.onComposerFocus} onReview={(text) => props.onCreateDraft({ text, source: "typed", promptId: state.currentPrompt?.id ?? null, transcriptionItemId: null })} />)}
           {state.phase === "analyzing" && !activeLookahead && <ProcessingProgress stage={state.processingStage} mode={state.mode} currentTopic={props.processingTopic} />}
           <StaleWorkPanel staleReason={staleReason} summaries={staleSummaries} mode={state.mode} onReuse={props.onReuseStaleSummary} />
           {props.decisionTray}

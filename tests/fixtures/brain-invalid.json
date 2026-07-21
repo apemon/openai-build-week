@@ -37,6 +37,14 @@
     "whyItMatters": "This deliberately asks two decisions.",
     "confirmedContext": [],
     "decisionImpact": [],
+    "answerAspects": [
+      {
+        "id": "ASPECT-001",
+        "label": "Billing authority",
+        "description": "Identify the role responsible for billing decisions.",
+        "required": true
+      }
+    ],
     "recommendation": null,
     "visualAid": null
   },

@@ -43,10 +43,30 @@ test("completes the keyboard-driven Prepared Demo and exports labeled Markdown",
   await expectNoSeriousAxeViolations(page);
   await page.getByRole("button", { name: "Confirm prepared digest" }).click();
   await expect(page.getByRole("heading", { name: /Which workspace roles/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assessing answer coverage" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Brain-authored answer aspects" })).toBeVisible();
+  await expect(page.getByText("Missing", { exact: true })).toBeVisible();
   await expectNoSeriousAxeViolations(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
-  await page.getByRole("button", { name: "Use prepared answer" }).click();
+  const clarify = page.getByRole("button", { name: "Continue with prepared clarification" });
+  await clarify.focus();
+  await clarify.press("Enter");
+  await expect(page.getByRole("heading", { name: "One clarification" })).toBeVisible();
+  await expect(page.getByText("Workspace owners cannot centrally pay for active members today.")).toBeVisible();
+  await expectNoSeriousAxeViolations(page);
+
+  const reviewSummary = page.getByRole("button", { name: "Review prepared Answer Summary" });
+  await reviewSummary.focus();
+  await reviewSummary.press("Enter");
+  const preparedSummary = page.getByRole("textbox", { name: "Answer Summary" });
+  await expect(preparedSummary).toHaveValue(/centrally pay for active members/);
+  await preparedSummary.fill("Build team billing so workspace owners can centrally pay for active members.");
+  await expectNoSeriousAxeViolations(page);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const confirmSummary = page.getByRole("button", { name: "Send confirmed summary to Brain" });
+  await confirmSummary.focus();
+  await confirmSummary.press("Enter");
   await expect(page.getByRole("region", { name: "Persistent Brain Status" })).toContainText("Brain working");
   await expect(page.getByText("Prepared fixture clock")).toBeVisible();
 
@@ -90,6 +110,8 @@ test("completes the keyboard-driven Prepared Demo and exports labeled Markdown",
   expect(exported.text).toContain("> **DRAFT — this Specification has not been finalized.**");
   expect(exported.text).toContain("## Acceptance Criteria");
   expect(exported.text).not.toContain("We need team billing for our SaaS.");
+  expect(exported.text).not.toContain("Workspace owners cannot centrally pay for active members today.");
+  expect(exported.text).not.toContain("Build team billing so workspace owners can centrally pay for active members.");
   expect(forbiddenRuntimeRequests).toBe(0);
   expect(await page.evaluate(() => (window as typeof window & { __microphoneRequests?: number }).__microphoneRequests)).toBe(0);
 });

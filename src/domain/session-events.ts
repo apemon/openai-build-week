@@ -44,6 +44,7 @@ export type SessionEvent =
   | { type: "LISTENING_STARTED" }
   | { type: "SPEECH_STARTED" }
   | { type: "SPEECH_STOPPED" }
+  | { type: "ANSWER_INTAKE_STARTED" }
   | { type: "ANSWER_DRAFT_READY"; draft: AnswerDraft }
   | { type: "ANSWER_DRAFT_EDITED"; text: string }
   | { type: "ANSWER_DRAFT_DISCARDED" }
@@ -90,6 +91,7 @@ export type V3SessionEvent =
   | { type: "V3_JOB_CONFIRMATION_UNDONE"; jobId: string }
   | { type: "V3_JOB_REVALIDATION_PENDING"; jobId: string }
   | { type: "V3_JOB_NOT_APPLIED"; jobId: string; reason: NotAppliedReason; explanation: string }
+  | { type: "V3_COMMUNICATOR_EXCHANGE_COMPLETED"; nextCancelEpoch: number }
   | { type: "V3_QUESTIONS_PAUSED"; nextCancelEpoch: number }
   | { type: "V3_QUESTIONS_RESUMED"; permit: QuestionPermit; identity: ExchangeIdentity }
   | { type: "V3_DECISION_BATCH_LOCKED"; batch: DecisionBatch }

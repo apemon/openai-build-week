@@ -10,14 +10,28 @@ import {
   createV3DecisionSummaryResponseEvent,
   createV3PromptResponseEvent,
 } from "@/agents/communicator/v3-presenter";
-import { lookaheadApprovalSchema } from "@/domain/schemas";
+import {
+  createAnswerClarificationPlaybackEvent,
+  createAnswerIntakeAssessmentEvent,
+} from "@/agents/communicator/answer-intake-presenter";
+import {
+  MAX_ANSWER_CLARIFICATIONS,
+  MAX_ANSWER_INTAKE_CONTRIBUTIONS,
+  validateAnswerIntakeAssessment,
+} from "@/domain/answer-intake";
+import { answerIntakeAssessmentSchema, interviewPromptSchema, lookaheadApprovalSchema } from "@/domain/schemas";
 import {
   exchangeIdentitySchema,
   questionPermitSchema,
   type ExchangeIdentity,
   type QuestionPermit,
 } from "@/domain/v3-schemas";
-import type { ClarificationTurn, LookaheadApproval } from "@/domain/types";
+import type {
+  AnswerIntakeAssessment,
+  ClarificationTurn,
+  InterviewPrompt,
+  LookaheadApproval,
+} from "@/domain/types";
 
 import type {
   ClarificationCommunicatorTransport,
@@ -53,8 +67,15 @@ type ClarificationResponseBinding = {
 };
 
 type V3ResponseBinding = {
-  purpose: "speak_brain_prompt" | "clarification_response" | "decision_summary";
+  purpose:
+    | "speak_brain_prompt"
+    | "clarification_response"
+    | "decision_summary"
+    | "answer_intake_assessment"
+    | "answer_clarification";
   identity: ExchangeIdentity;
+  clarificationSequence: 1 | 2 | null;
+  assessmentSequence: 1 | 2 | 3 | null;
 };
 
 interface ActivePermittedExchange {
@@ -70,6 +91,17 @@ interface CaptureBinding {
   identity: ExchangeIdentity;
   speechAccepted: boolean;
   preserveBehindRevalidation: boolean;
+}
+
+interface ActiveAnswerIntake {
+  prompt: InterviewPrompt;
+  identity: ExchangeIdentity;
+  contributions: string[];
+  latestAssessment: AnswerIntakeAssessment | null;
+  assessmentPending: boolean;
+  clarificationCount: number;
+  promptPlaybackCancelled: boolean;
+  cancelledClarificationSequences: Set<number>;
 }
 
 export interface OpenAIWebRTCTransportDependencies {
@@ -108,6 +140,7 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
   private activeClarification: ActiveClarification | null = null;
   private activePermittedExchange: ActivePermittedExchange | null = null;
   private activeAuthoritativeIdentity: ExchangeIdentity | null = null;
+  private activeAnswerIntake: ActiveAnswerIntake | null = null;
   private captureBinding: CaptureBinding | null = null;
   private cancelEpoch = 0;
   private activeClarificationResponseId: string | null = null;
@@ -245,13 +278,114 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
     return this.lastPromptDelivery;
   }
 
+  beginAuthoritativeAnswer(prompt: InterviewPrompt, identity: ExchangeIdentity): void {
+    const parsedPrompt = interviewPromptSchema.parse(prompt);
+    const parsedIdentity = parseAuthoritativeIdentity(identity, parsedPrompt.id);
+    this.requireConnected();
+    if (this.activePermittedExchange || this.activeClarification) {
+      throw new Error("A different Communicator exchange is already active.");
+    }
+    if (this.activeAuthoritativeIdentity && !sameIdentity(this.activeAuthoritativeIdentity, parsedIdentity)) {
+      this.stopProviderOutputBestEffort();
+      this.removeV3ResponseBindings(this.activeAuthoritativeIdentity.exchangeId);
+      this.clearAnswerIntakeMemory();
+      this.activeAuthoritativeIdentity = null;
+    }
+    this.adoptEpochForNewExchange(parsedIdentity.cancelEpoch);
+    if (this.activeAnswerIntake && sameIdentity(this.activeAnswerIntake.identity, parsedIdentity)) return;
+
+    this.setMicrophoneEnabled(false);
+    this.activeAuthoritativeIdentity = parsedIdentity;
+    this.activeAnswerIntake = {
+      prompt: parsedPrompt,
+      identity: parsedIdentity,
+      contributions: [],
+      latestAssessment: null,
+      assessmentPending: false,
+      clarificationCount: 0,
+      promptPlaybackCancelled: false,
+      cancelledClarificationSequences: new Set(),
+    };
+    this.approvedQuestions.set(parsedIdentity.promptId, parsedPrompt.spokenQuestion.trim());
+    try {
+      this.sendEvent(createV3AuthoritativePromptResponseEvent(parsedIdentity, parsedPrompt.spokenQuestion));
+    } catch (error) {
+      this.clearAnswerIntakeMemory();
+      this.activeAuthoritativeIdentity = null;
+      throw error;
+    }
+  }
+
+  answerAuthoritativeNow(identity: ExchangeIdentity): void {
+    const active = this.requireActiveAnswerIntake(identity);
+    active.promptPlaybackCancelled = true;
+    if (active.clarificationCount > 0) {
+      active.cancelledClarificationSequences.add(active.clarificationCount);
+    }
+    this.stopIdentityAudioBestEffort(identity.exchangeId);
+    this.setMicrophoneEnabled(true);
+  }
+
+  submitAnswerIntakeContribution(text: string, identity: ExchangeIdentity): void {
+    const active = this.requireActiveAnswerIntake(identity);
+    if (active.assessmentPending) throw new Error("Answer Intake assessment is still running.");
+    const contribution = text.trim();
+    if (!contribution || contribution.length > 4_000) throw new Error("Answer Intake contribution is invalid.");
+    if (active.contributions.length >= MAX_ANSWER_INTAKE_CONTRIBUTIONS) {
+      throw new Error("Answer Intake has reached its contribution limit.");
+    }
+    active.contributions.push(contribution);
+    active.assessmentPending = true;
+    this.setMicrophoneEnabled(false);
+    try {
+      this.sendEvent(createAnswerIntakeAssessmentEvent(active.prompt, active.contributions, active.identity));
+    } catch (error) {
+      active.contributions.pop();
+      active.assessmentPending = false;
+      throw error;
+    }
+  }
+
+  speakAnswerClarification(
+    question: string,
+    aspectIds: string[],
+    identity: ExchangeIdentity,
+  ): void {
+    const active = this.requireActiveAnswerIntake(identity);
+    if (active.assessmentPending) throw new Error("Answer Intake assessment is still running.");
+    if (active.clarificationCount >= MAX_ANSWER_CLARIFICATIONS) {
+      throw new Error("Answer Intake has reached its clarification limit.");
+    }
+    const assessment = active.latestAssessment;
+    if (
+      !assessment?.clarificationQuestion
+      || assessment.clarificationQuestion !== question.trim()
+      || !sameStringMembers(assessment.clarificationAspectIds, aspectIds)
+    ) throw new Error("Clarification does not match the latest validated Coverage Assessment.");
+    const sequence = (active.clarificationCount + 1) as 1 | 2;
+    this.setMicrophoneEnabled(false);
+    this.sendEvent(createAnswerClarificationPlaybackEvent(question, aspectIds, sequence, active.identity));
+    active.clarificationCount = sequence;
+  }
+
+  finishAuthoritativeAnswer(identity: ExchangeIdentity): void {
+    this.requireActiveAnswerIntake(identity);
+    this.stopProviderOutputBestEffort();
+    this.removeV3ResponseBindings(identity.exchangeId);
+    this.setMicrophoneEnabled(false);
+    this.clearAnswerIntakeMemory();
+    this.activeAuthoritativeIdentity = null;
+    this.activeTranscriptionItemId = null;
+    this.captureBinding = null;
+  }
+
   speakPromptWithIdentity(identity: ExchangeIdentity, spokenQuestion: string): void {
     const parsedIdentity = exchangeIdentitySchema.parse(identity);
     if (parsedIdentity.kind !== "authoritative_or_app_prompt") {
       throw new Error("Authoritative prompt speech requires a non-permitted Exchange Identity.");
     }
     this.requireConnected();
-    this.requireCurrentEpoch(parsedIdentity.cancelEpoch);
+    this.adoptEpochForNewExchange(parsedIdentity.cancelEpoch);
     if (this.activePermittedExchange || this.activeAuthoritativeIdentity) {
       throw new Error("A different identity-bound exchange is already active.");
     }
@@ -276,13 +410,14 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
     this.stopProviderOutputBestEffort();
     this.removeV3ResponseBindings(parsedIdentity.exchangeId);
     this.setMicrophoneEnabled(false);
+    this.clearAnswerIntakeMemory();
     this.activeAuthoritativeIdentity = null;
   }
 
   beginPermittedExchange(permit: QuestionPermit, identity: ExchangeIdentity): void {
     const scope = parsePermittedScope(permit, identity);
     this.requireConnected();
-    this.requireCurrentEpoch(scope.identity.cancelEpoch);
+    this.adoptEpochForNewExchange(scope.identity.cancelEpoch);
     if (this.activePermittedExchange) {
       if (sameIdentity(this.activePermittedExchange.identity, scope.identity)) return;
       throw new Error("A different permitted exchange is already active.");
@@ -631,7 +766,11 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
         return;
       case "response.created": {
         const v3Binding = getV3ResponseBinding(event.response.metadata, this.currentV3Identity());
-        if (v3Binding && this.isCurrentV3Binding(v3Binding)) {
+        if (
+          v3Binding
+          && this.isCurrentV3Binding(v3Binding)
+          && !this.isSuppressedAnswerAudio(v3Binding)
+        ) {
           this.v3Responses.set(event.response.id, v3Binding);
           return;
         }
@@ -654,13 +793,22 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
         const v3Binding = this.v3Responses.get(event.response_id);
         if (v3Binding) {
           if (!this.isCurrentV3Binding(v3Binding)) return;
-          if (v3Binding.purpose === "decision_summary") return;
+          if (
+            v3Binding.purpose === "decision_summary"
+            || v3Binding.purpose === "answer_intake_assessment"
+          ) return;
           void this.audioElement?.play().catch(() => {
             this.emit({ type: "error", code: "AUDIO_PLAYBACK_FAILED", retryable: true });
           });
           if (v3Binding.purpose === "speak_brain_prompt") {
             this.emitV3({
               type: "prompt_playback_started",
+              identity: v3Binding.identity,
+              providerEventId: event.event_id,
+            });
+          } else if (v3Binding.purpose === "answer_clarification") {
+            this.emitV3({
+              type: "answer_clarification_started",
               identity: v3Binding.identity,
               providerEventId: event.event_id,
             });
@@ -713,6 +861,14 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
               identity: v3Binding.identity,
               providerEventId: event.event_id,
             });
+          } else if (v3Binding.purpose === "answer_clarification") {
+            const expected = this.activeAnswerIntake?.latestAssessment?.clarificationQuestion;
+            this.lastPromptDelivery = {
+              promptId: v3Binding.identity.promptId,
+              matchedApprovedQuestion: expected
+                ? normalizeSpeech(event.transcript) === normalizeSpeech(expected)
+                : null,
+            };
           }
           this.outputTranscripts.delete(event.response_id);
           return;
@@ -748,7 +904,27 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
       case "response.output_text.done": {
         const v3Binding = this.v3Responses.get(event.response_id);
         if (v3Binding) {
-          if (!this.isCurrentV3Binding(v3Binding) || v3Binding.purpose !== "decision_summary") return;
+          if (!this.isCurrentV3Binding(v3Binding)) return;
+          if (v3Binding.purpose === "answer_intake_assessment") {
+            const active = this.activeAnswerIntake;
+            if (!active || !sameIdentity(active.identity, v3Binding.identity)) return;
+            const assessment = parseAnswerIntakeAssessment(event.text, active.prompt);
+            if (!assessment) {
+              active.assessmentPending = false;
+              this.emit({ type: "error", code: "INVALID_ANSWER_INTAKE_ASSESSMENT", retryable: true });
+              return;
+            }
+            active.latestAssessment = assessment;
+            active.assessmentPending = false;
+            this.emitV3({
+              type: "answer_intake_assessed",
+              assessment,
+              identity: v3Binding.identity,
+              providerEventId: event.event_id,
+            });
+            return;
+          }
+          if (v3Binding.purpose !== "decision_summary") return;
           const summary = parseDecisionSummaryOutput(event.text);
           if (!summary) {
             this.emit({ type: "error", code: "INVALID_DECISION_SUMMARY", retryable: true });
@@ -791,13 +967,20 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
               type: "error",
               code: v3Binding.purpose === "decision_summary"
                 ? "DECISION_SUMMARY_FAILED"
+                : v3Binding.purpose === "answer_intake_assessment"
+                  ? "ANSWER_INTAKE_ASSESSMENT_FAILED"
+                  : v3Binding.purpose === "answer_clarification"
+                    ? "ANSWER_CLARIFICATION_FAILED"
                 : v3Binding.purpose === "clarification_response"
                   ? "CLARIFICATION_RESPONSE_FAILED"
                   : "PROMPT_PLAYBACK_FAILED",
               retryable: true,
             });
             this.finishV3Response(event.response.id, v3Binding, false, event.event_id);
-          } else if (v3Binding.purpose === "decision_summary") {
+          } else if (
+            v3Binding.purpose === "decision_summary"
+            || v3Binding.purpose === "answer_intake_assessment"
+          ) {
             this.finishV3Response(event.response.id, v3Binding, false, event.event_id);
           }
           return;
@@ -875,9 +1058,22 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
       && (!authoritative || !sameIdentity(authoritative, binding.identity))
     ) return;
     if (active) active.responsePending = false;
+    if (
+      binding.purpose === "answer_intake_assessment"
+      && this.activeAnswerIntake
+      && sameIdentity(this.activeAnswerIntake.identity, binding.identity)
+    ) {
+      this.activeAnswerIntake.assessmentPending = false;
+    }
     if (binding.purpose === "speak_brain_prompt") {
       this.emitV3({
         type: "prompt_playback_done",
+        identity: binding.identity,
+        providerEventId,
+      });
+    } else if (binding.purpose === "answer_clarification") {
+      this.emitV3({
+        type: "answer_clarification_done",
         identity: binding.identity,
         providerEventId,
       });
@@ -902,10 +1098,34 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
     return active;
   }
 
+  private requireActiveAnswerIntake(identity: ExchangeIdentity): ActiveAnswerIntake {
+    const parsedIdentity = parseAuthoritativeIdentity(identity);
+    const active = this.activeAnswerIntake;
+    if (!active || !sameIdentity(active.identity, parsedIdentity)) {
+      throw new Error("Exchange identity does not match the active Answer Intake.");
+    }
+    this.requireConnected();
+    this.requireCurrentEpoch(parsedIdentity.cancelEpoch);
+    return active;
+  }
+
   private requireCurrentEpoch(epoch: number): void {
     if (epoch !== this.cancelEpoch) {
       throw new Error("Exchange cancellation epoch is stale.");
     }
+  }
+
+  private adoptEpochForNewExchange(epoch: number): void {
+    if (epoch === this.cancelEpoch) return;
+    if (
+      !Number.isInteger(epoch)
+      || epoch < this.cancelEpoch
+      || this.activePermittedExchange
+      || this.activeAuthoritativeIdentity
+    ) {
+      throw new Error("Exchange cancellation epoch is stale.");
+    }
+    this.cancelEpoch = epoch;
   }
 
   private advanceCancellationEpoch(nextCancelEpoch: number): void {
@@ -935,20 +1155,71 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
     this.audioElement?.pause();
   }
 
+  private stopIdentityAudioBestEffort(exchangeId: string): void {
+    let foundAudioBinding = false;
+    for (const [responseId, binding] of this.v3Responses) {
+      if (
+        binding.identity.exchangeId === exchangeId
+        && (binding.purpose === "speak_brain_prompt" || binding.purpose === "answer_clarification")
+      ) {
+        foundAudioBinding = true;
+        try {
+          this.sendEvent({ type: "response.cancel", response_id: responseId });
+        } catch {
+          // Local identity removal remains authoritative.
+        }
+        this.v3Responses.delete(responseId);
+        this.outputTranscripts.delete(responseId);
+      }
+    }
+    try {
+      if (!foundAudioBinding && !this.activeAnswerIntake?.assessmentPending) {
+        this.sendEvent({ type: "response.cancel" });
+      }
+      this.sendEvent({ type: "output_audio_buffer.clear" });
+    } catch {
+      // Microphone gating remains authoritative after a transport race.
+    }
+    this.audioElement?.pause();
+  }
+
   private isCurrentV3Binding(binding: V3ResponseBinding): boolean {
     const active = this.activePermittedExchange;
     const authoritative = this.activeAuthoritativeIdentity;
-    return Boolean(
+    const identityCurrent = Boolean(
       (
         (active && !active.paused && sameIdentity(active.identity, binding.identity))
         || (authoritative && sameIdentity(authoritative, binding.identity))
       )
       && binding.identity.cancelEpoch === this.cancelEpoch,
     );
+    if (!identityCurrent) return false;
+    if (binding.purpose === "answer_intake_assessment") {
+      return Boolean(
+        this.activeAnswerIntake
+        && binding.assessmentSequence === this.activeAnswerIntake.contributions.length,
+      );
+    }
+    if (binding.purpose === "answer_clarification") {
+      return Boolean(
+        this.activeAnswerIntake
+        && binding.clarificationSequence === this.activeAnswerIntake.clarificationCount,
+      );
+    }
+    return true;
   }
 
   private currentV3Identity(): ExchangeIdentity | null {
     return this.activePermittedExchange?.identity ?? this.activeAuthoritativeIdentity;
+  }
+
+  private isSuppressedAnswerAudio(binding: V3ResponseBinding): boolean {
+    const active = this.activeAnswerIntake;
+    if (!active || !sameIdentity(active.identity, binding.identity)) return false;
+    if (binding.purpose === "speak_brain_prompt") return active.promptPlaybackCancelled;
+    return binding.purpose === "answer_clarification"
+      && binding.clarificationSequence !== null
+      && active.cancelledClarificationSequences.has(binding.clarificationSequence);
   }
 
   private removeV3ResponseBindings(exchangeId: string): void {
@@ -958,6 +1229,14 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
         this.outputTranscripts.delete(responseId);
       }
     }
+  }
+
+  private clearAnswerIntakeMemory(): void {
+    if (!this.activeAnswerIntake) return;
+    this.activeAnswerIntake.contributions.length = 0;
+    this.activeAnswerIntake.latestAssessment = null;
+    this.activeAnswerIntake.assessmentPending = false;
+    this.activeAnswerIntake = null;
   }
 
   private finishClarificationResponse(
@@ -1070,6 +1349,7 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
     this.activeClarification = null;
     this.activePermittedExchange = null;
     this.activeAuthoritativeIdentity = null;
+    this.clearAnswerIntakeMemory();
     this.captureBinding = null;
     this.cancelEpoch = 0;
     this.activeClarificationResponseId = null;
@@ -1126,6 +1406,8 @@ function getV3ResponseBinding(
     purpose !== "speak_brain_prompt"
     && purpose !== "clarification_response"
     && purpose !== "decision_summary"
+    && purpose !== "answer_intake_assessment"
+    && purpose !== "answer_clarification"
   ) return null;
   const cancelEpoch = Number(metadata?.cancelEpoch);
   const identity = exchangeIdentitySchema.safeParse({
@@ -1136,7 +1418,29 @@ function getV3ResponseBinding(
     cancelEpoch,
   });
   if (!identity.success || !sameIdentity(identity.data, activeIdentity)) return null;
-  return { purpose, identity: identity.data };
+  const clarificationSequence = purpose === "answer_clarification"
+    ? Number(metadata?.clarificationSequence)
+    : null;
+  if (
+    purpose === "answer_clarification"
+    && clarificationSequence !== 1
+    && clarificationSequence !== 2
+  ) return null;
+  const assessmentSequence = purpose === "answer_intake_assessment"
+    ? Number(metadata?.assessmentSequence)
+    : null;
+  if (
+    purpose === "answer_intake_assessment"
+    && assessmentSequence !== 1
+    && assessmentSequence !== 2
+    && assessmentSequence !== 3
+  ) return null;
+  return {
+    purpose,
+    identity: identity.data,
+    clarificationSequence: clarificationSequence as 1 | 2 | null,
+    assessmentSequence: assessmentSequence as 1 | 2 | 3 | null,
+  };
 }
 
 function parsePermittedScope(permit: QuestionPermit, identity: ExchangeIdentity) {
@@ -1150,6 +1454,41 @@ function parsePermittedScope(permit: QuestionPermit, identity: ExchangeIdentity)
     throw new Error("Exchange identity does not match the Question Permit.");
   }
   return { permit: parsedPermit, identity: parsedIdentity };
+}
+
+function parseAuthoritativeIdentity(identity: ExchangeIdentity, expectedPromptId?: string) {
+  const parsed = exchangeIdentitySchema.parse(identity);
+  if (
+    parsed.kind !== "authoritative_or_app_prompt"
+    || parsed.permitId !== null
+    || (expectedPromptId !== undefined && parsed.promptId !== expectedPromptId)
+  ) {
+    throw new Error("Exchange identity does not match the authoritative Interview Prompt.");
+  }
+  return parsed;
+}
+
+function parseAnswerIntakeAssessment(
+  value: string,
+  prompt: InterviewPrompt,
+): AnswerIntakeAssessment | null {
+  let candidate: unknown;
+  try {
+    candidate = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  const strict = answerIntakeAssessmentSchema.safeParse(candidate);
+  if (!strict.success) return null;
+  const validated = validateAnswerIntakeAssessment(prompt, strict.data);
+  return validated.valid ? validated.assessment : null;
+}
+
+function sameStringMembers(left: string[], right: string[]): boolean {
+  return left.length === right.length
+    && new Set(left).size === left.length
+    && new Set(right).size === right.length
+    && left.every((value) => right.includes(value));
 }
 
 function sameIdentity(left: ExchangeIdentity, right: ExchangeIdentity): boolean {

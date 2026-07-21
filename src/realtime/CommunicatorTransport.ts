@@ -1,4 +1,4 @@
-import type { LookaheadApproval } from "@/domain/types";
+import type { AnswerIntakeAssessment, InterviewPrompt, LookaheadApproval } from "@/domain/types";
 import type { ExchangeIdentity, QuestionPermit } from "@/domain/v3-schemas";
 
 export type MicrophoneState = "off" | "listening" | "speech_detected" | "transcribing" | "reviewing_answer";
@@ -50,11 +50,19 @@ export type V3CommunicatorEvent =
   | { type: "prompt_playback_started"; identity: ExchangeIdentity; providerEventId: string }
   | { type: "prompt_playback_done"; identity: ExchangeIdentity; providerEventId: string }
   | { type: "clarification_response_done"; text: string; identity: ExchangeIdentity; providerEventId: string }
-  | { type: "decision_summary_ready"; text: string; uncertainties: string[]; identity: ExchangeIdentity; providerEventId: string };
+  | { type: "decision_summary_ready"; text: string; uncertainties: string[]; identity: ExchangeIdentity; providerEventId: string }
+  | { type: "answer_intake_assessed"; assessment: AnswerIntakeAssessment; identity: ExchangeIdentity; providerEventId: string }
+  | { type: "answer_clarification_started"; identity: ExchangeIdentity; providerEventId: string }
+  | { type: "answer_clarification_done"; identity: ExchangeIdentity; providerEventId: string };
 
 /** V3 identity-safe capabilities. Only one permit may be active even when a
  * validated Interview Window contains multiple permits. */
 export interface V3CommunicatorTransport extends CommunicatorTransport {
+  beginAuthoritativeAnswer(prompt: InterviewPrompt, identity: ExchangeIdentity): void;
+  answerAuthoritativeNow(identity: ExchangeIdentity): void;
+  submitAnswerIntakeContribution(text: string, identity: ExchangeIdentity): void;
+  speakAnswerClarification(question: string, aspectIds: string[], identity: ExchangeIdentity): void;
+  finishAuthoritativeAnswer(identity: ExchangeIdentity): void;
   beginPermittedExchange(permit: QuestionPermit, identity: ExchangeIdentity): void;
   submitPermittedClarification(text: string, identity: ExchangeIdentity): void;
   requestPermittedDecisionSummary(identity: ExchangeIdentity): void;

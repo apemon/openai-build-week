@@ -130,7 +130,9 @@ function revalidateJobs(state: V3RuntimeState, freshWindow: InterviewWindow, dis
   return {
     ...state,
     jobs,
-    activeJobId: jobs.some((job) => job.id === state.activeJobId && job.status !== "not_applied") ? state.activeJobId : null,
+    activeJobId: jobs.some((job) => job.id === state.activeJobId && job.status === "revalidation_pending")
+      ? state.activeJobId
+      : null,
     adaptiveWindow,
     interviewWindow: freshWindow,
   };
@@ -267,7 +269,13 @@ export function v3RuntimeReducer(state: V3RuntimeState, event: V3SessionEvent): 
       break;
     case "V3_PERMIT_PRESENTED":
       if (state.questionsPaused || state.activeJobId || event.permit.windowId !== state.interviewWindow?.id) return state;
-      next = { ...state, activeJobId: event.job.id, jobs: [...state.jobs, interviewJobSchema.parse({ ...event.job, status: "presenting" })] };
+      if (event.identity.cancelEpoch < state.cancelEpoch) return state;
+      next = {
+        ...state,
+        cancelEpoch: event.identity.cancelEpoch,
+        activeJobId: event.job.id,
+        jobs: [...state.jobs, interviewJobSchema.parse({ ...event.job, status: "presenting" })],
+      };
       break;
     case "V3_JOB_UPDATED":
       if (!state.jobs.some((job) => job.id === event.job.id)) return state;
@@ -291,6 +299,10 @@ export function v3RuntimeReducer(state: V3RuntimeState, event: V3SessionEvent): 
       break;
     case "V3_JOB_NOT_APPLIED":
       next = { ...state, activeJobId: state.activeJobId === event.jobId ? null : state.activeJobId, jobs: state.jobs.map((job) => job.id === event.jobId ? interviewJobSchema.parse({ ...job, status: "not_applied", notAppliedReason: event.reason, notAppliedExplanation: event.explanation }) : job) };
+      break;
+    case "V3_COMMUNICATOR_EXCHANGE_COMPLETED":
+      if (event.nextCancelEpoch <= state.cancelEpoch) return state;
+      next = { ...state, cancelEpoch: event.nextCancelEpoch };
       break;
     case "V3_QUESTIONS_PAUSED":
       next = { ...state, questionsPaused: true, cancelEpoch: event.nextCancelEpoch, jobs: state.jobs.map((job) => job.id === state.activeJobId && !["applied", "not_applied"].includes(job.status) ? { ...job, status: "paused" as const } : job) };
@@ -351,7 +363,10 @@ export function getV3RuntimeInvariantErrors(state: V3RuntimeState): string[] {
   const errors: string[] = [];
   const active = state.jobs.filter((job) => ["presenting", "clarifying", "summary_draft", "paused"].includes(job.status));
   if (active.length > 1) errors.push("Only one Interview Job may present or clarify at a time");
-  if (state.activeJobId && !active.some((job) => job.id === state.activeJobId)) errors.push("Active Interview Job identity must resolve to active work");
+  const activeIdentityStatuses: InterviewJob["status"][] = ["presenting", "clarifying", "summary_draft", "paused", "revalidation_pending"];
+  if (state.activeJobId && !state.jobs.some((job) => job.id === state.activeJobId && activeIdentityStatuses.includes(job.status))) {
+    errors.push("Active Interview Job identity must resolve to active or revalidation-pending work");
+  }
   if (state.interviewWindow && state.interviewWindow.permits.length > state.adaptiveWindow.applicationCap) errors.push("Interview Window exceeds the application cap");
   if (state.lockedDecisionBatch) {
     const unique = new Set(state.lockedDecisionBatch.entries.map((entry) => entry.jobId));

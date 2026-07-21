@@ -15,4 +15,10 @@ describe("InterviewRoom session-link placement", () => {
     expect(header!.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(link.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  it("renders an Answer Intake slot in place of the ordinary prepared-answer control", () => {
+    render(<InterviewRoom state={{ ...createInitialState("demo"), phase: "collecting_answer" }} remainingLabel="29:00" microphoneState="listening" voiceMuted onToggleVoice={vi.fn()} onResumeMicrophone={vi.fn()} onCreateDraft={vi.fn()} onEditDraft={vi.fn()} onConfirmDraft={vi.fn()} onRecordAgain={vi.fn()} onReviewSpecification={vi.fn()} onCorrectItem={vi.fn()} onUsePreparedAnswer={vi.fn()} answerIntake={<section aria-label="Prepared Answer Intake">Multi-aspect intake</section>} />);
+    expect(screen.getByRole("region", { name: "Prepared Answer Intake" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Use prepared answer" })).not.toBeInTheDocument();
+  });
 });

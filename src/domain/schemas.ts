@@ -16,6 +16,7 @@ export const sessionPhaseSchema = z.enum([
   "listening",
   "speech_detected",
   "transcribing",
+  "collecting_answer",
   "reviewing_answer",
   "analyzing",
   "clarifying_lookahead",
@@ -105,6 +106,53 @@ export const readinessAssessmentSchema = z.object({
   openQuestionIds: z.array(entityId).max(30),
 });
 
+export const answerAspectSchema = z.object({
+  id: z.string().regex(/^ASPECT-[0-9]{3,}$/),
+  label: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(1).max(500),
+  required: z.boolean(),
+}).strict();
+
+export const answerAspectCoverageStatusSchema = z.enum(["covered", "missing", "uncertain"]);
+
+export const answerAspectCoverageSchema = z.object({
+  aspectId: z.string().regex(/^ASPECT-[0-9]{3,}$/),
+  status: answerAspectCoverageStatusSchema,
+}).strict();
+
+export const answerIntakeAssessmentSchema = z.object({
+  summary: z.string().trim().min(1).max(4_000),
+  coverage: z.array(answerAspectCoverageSchema).min(1).max(5),
+  uncertainties: z.array(z.string().trim().min(1).max(300)).max(5),
+  clarificationQuestion: z.string().trim().min(1).max(300).nullable(),
+  clarificationAspectIds: z.array(z.string().regex(/^ASPECT-[0-9]{3,}$/)).max(5),
+}).strict().superRefine((assessment, context) => {
+  const coverageIds = new Set<string>();
+  for (const [index, item] of assessment.coverage.entries()) {
+    if (coverageIds.has(item.aspectId)) {
+      context.addIssue({ code: "custom", path: ["coverage", index, "aspectId"], message: "Coverage aspect IDs must be unique" });
+    }
+    coverageIds.add(item.aspectId);
+  }
+  const clarificationIds = new Set<string>();
+  for (const [index, aspectId] of assessment.clarificationAspectIds.entries()) {
+    if (clarificationIds.has(aspectId)) {
+      context.addIssue({ code: "custom", path: ["clarificationAspectIds", index], message: "Clarification aspect IDs must be unique" });
+    }
+    clarificationIds.add(aspectId);
+    const coverage = assessment.coverage.find((item) => item.aspectId === aspectId);
+    if (!coverage || coverage.status === "covered") {
+      context.addIssue({ code: "custom", path: ["clarificationAspectIds", index], message: "Clarification may target only missing or uncertain aspects" });
+    }
+  }
+  if (assessment.clarificationQuestion && clarificationIds.size === 0) {
+    context.addIssue({ code: "custom", path: ["clarificationAspectIds"], message: "A clarification question requires at least one target aspect" });
+  }
+  if (!assessment.clarificationQuestion && clarificationIds.size > 0) {
+    context.addIssue({ code: "custom", path: ["clarificationQuestion"], message: "Clarification targets require a clarification question" });
+  }
+});
+
 export const interviewPromptSchema = z.object({
   id: entityId,
   decisionKey: z.string().trim().min(1).max(200),
@@ -113,6 +161,18 @@ export const interviewPromptSchema = z.object({
   whyItMatters: z.string().trim().min(1).max(2_000),
   confirmedContext: z.array(shortText).max(12),
   decisionImpact: z.array(shortText).max(12),
+  answerAspects: z.array(answerAspectSchema).min(1).max(5).superRefine((aspects, context) => {
+    const ids = new Set<string>();
+    for (const [index, aspect] of aspects.entries()) {
+      if (ids.has(aspect.id)) {
+        context.addIssue({ code: "custom", path: [index, "id"], message: "Answer Aspect IDs must be unique" });
+      }
+      ids.add(aspect.id);
+    }
+    if (!aspects.some((aspect) => aspect.required)) {
+      context.addIssue({ code: "custom", message: "At least one Answer Aspect must be required" });
+    }
+  }),
   recommendation: z
     .object({ answer: shortText, rationale: z.string().trim().min(1).max(2_000), externalEvidenceIds: z.array(z.string().regex(/^EVID-[0-9]{3,}$/)).max(10).default([]) })
     .nullable(),
@@ -331,9 +391,11 @@ export const conversationTurnSchema = z.object({
 
 export const answerDraftSchema = z.object({
   text: z.string().max(4_000),
-  source: z.enum(["typed", "transcription"]),
+  source: z.enum(["typed", "transcription", "communicator_summary"]),
   promptId: entityId.nullable(),
   transcriptionItemId: z.string().trim().min(1).max(200).nullable(),
+  coverage: z.array(answerAspectCoverageSchema).max(5).optional(),
+  uncertainties: z.array(z.string().trim().min(1).max(300)).max(5).optional(),
 });
 
 export const sessionProvenanceSchema = z.discriminatedUnion("source", [

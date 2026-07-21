@@ -68,6 +68,20 @@
         "whyItMatters": "The provider determines the external billing integration boundary.",
         "confirmedContext": ["The product needs team billing."],
         "decisionImpact": ["Determines the payment integration dependency."],
+        "answerAspects": [
+          {
+            "id": "ASPECT-003",
+            "label": "Provider choice",
+            "description": "Identify the billing provider the product should integrate with.",
+            "required": true
+          },
+          {
+            "id": "ASPECT-004",
+            "label": "Selection constraint",
+            "description": "State any product constraint that governs the provider choice.",
+            "required": false
+          }
+        ],
         "recommendation": null,
         "visualAid": null
       },
@@ -84,6 +98,20 @@
     "whyItMatters": "Billing permissions define the authorization boundary.",
     "confirmedContext": ["The product needs team billing."],
     "decisionImpact": ["Determines billing access controls."],
+    "answerAspects": [
+      {
+        "id": "ASPECT-001",
+        "label": "Authorized roles",
+        "description": "Identify every workspace role allowed to manage billing.",
+        "required": true
+      },
+      {
+        "id": "ASPECT-002",
+        "label": "Billing capabilities",
+        "description": "Describe which billing actions the authorized roles may perform.",
+        "required": false
+      }
+    ],
     "recommendation": null,
     "visualAid": null
   },

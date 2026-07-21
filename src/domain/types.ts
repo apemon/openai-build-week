@@ -2,7 +2,11 @@ import type { z } from "zod";
 import type {
   acceptanceCriterionSchema,
   activeLookaheadSchema,
+  answerAspectCoverageSchema,
+  answerAspectCoverageStatusSchema,
+  answerAspectSchema,
   answerDraftSchema,
+  answerIntakeAssessmentSchema,
   apiErrorSchema,
   brainModelOutputSchema,
   brainOperationSchema,
@@ -56,6 +60,10 @@ export type SpecificationItem = z.infer<typeof specificationItemSchema>;
 export type AcceptanceCriterion = z.infer<typeof acceptanceCriterionSchema>;
 export type NextAction = z.infer<typeof nextActionSchema>;
 export type ReadinessAssessment = z.infer<typeof readinessAssessmentSchema>;
+export type AnswerAspect = z.infer<typeof answerAspectSchema>;
+export type AnswerAspectCoverageStatus = z.infer<typeof answerAspectCoverageStatusSchema>;
+export type AnswerAspectCoverage = z.infer<typeof answerAspectCoverageSchema>;
+export type AnswerIntakeAssessment = z.infer<typeof answerIntakeAssessmentSchema>;
 export type InterviewPrompt = z.infer<typeof interviewPromptSchema>;
 export type ContextSourceMetadata = z.infer<typeof contextSourceMetadataSchema>;
 export type SourceReference = z.infer<typeof sourceReferenceSchema>;

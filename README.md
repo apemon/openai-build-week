@@ -4,11 +4,13 @@ Spec Grill is a solo Product Manager requirements interview room. It turns a vag
 
 V1, V2, and the approved V3 extension are implemented. V3 adds Brain-issued Interview Windows of up to three pairwise-independent Question Permits while keeping exactly one active question, Persistent Brain Status from content-free lifecycle events, revision-first revalidation, atomic Decision Batches, bounded confirmed-queue recovery, and disabled-by-default experimental Brain harnesses. See [V3_IMPLEMENTATION_HANDOFF.md](./V3_IMPLEMENTATION_HANDOFF.md) for the settled scope and acceptance criteria.
 
+The approved V3.1 extension replaces direct transcription-to-draft behavior with bounded Answer Intake. Every Brain-authored Interview Prompt defines one to five Answer Aspects; the Communicator assesses only those aspects from at most three temporary Product Manager contributions, may ask at most two scoped clarifications, and produces an editable Answer Summary. Only the exact Product Manager-edited and explicitly confirmed summary reaches the Brain. See [V3_1_IMPLEMENTATION_HANDOFF.md](./V3_1_IMPLEMENTATION_HANDOFF.md).
+
 ADR-0011 adds an opt-in local hackathon Live path that runs the authoritative Brain through the server-side Codex SDK and resumes one locally persisted Codex thread. This is a deliberate exception to the default stateless Brain; it is not a production, hosted-persistence, authenticated-sharing, or privacy-retention design.
 
 The MVP has two deliberately separate modes:
 
-- **Live Mode** sends only Product Manager-confirmed text to an authoritative server-side Brain. Voice is optional and every transcription remains an editable Answer Draft until confirmation.
+- **Live Mode** sends only Product Manager-confirmed text to an authoritative server-side Brain. Voice is optional; finalized transcription remains temporary Answer Intake until coverage assessment or truthful fallback produces an editable Answer Summary for confirmation.
 - **Prepared Demo** runs a deterministic eight-turn team-billing walkthrough from validated local snapshots. It makes no OpenAI, transcription, or microphone call at runtime.
 
 Prepared content is always labeled `Prepared demo • no AI call`; it is never substituted into or merged with a Live Specification.
@@ -22,7 +24,7 @@ The runtime model boundary is fixed:
 - Default Brain (`one_shot`): `gpt-5.6`, medium reasoning, Responses API Structured Outputs, complete confirmed state, `background: true`, and `store: false`.
 - Local hackathon Brain (`codex_sdk_persistent`): server-side Codex SDK, default model `gpt-5.6-sol`, complete confirmed state, validated structured output, one bounded repair, and one locally persisted thread. It does not make a `store:false` claim.
 - Communicator: `gpt-realtime-2.1` over native WebRTC, with semantic VAD configured with `create_response: false`.
-- Transcription: `gpt-4o-transcribe`, producing an editable Answer Draft.
+- Transcription: `gpt-4o-transcribe`, producing one identity-bound temporary Answer Intake contribution rather than an immediate draft.
 
 In `one_shot`, each Brain attempt creates one background Response, then polls while its provider status is `queued` or `in_progress`. The application timeout defaults to five minutes per attempt and can be configured with `OPENAI_BRAIN_TIMEOUT_MS` from 30,000 through the 300,000 millisecond cap. One automatic repair may create a second attempt, so the route declares a 620-second execution budget; deployment requires a hosting plan that supports that duration. A timeout or aborted request preserves the last valid Specification and triggers best-effort cancellation when a provider response ID is available; cancellation failure does not replace the application timeout result or prove that provider execution stopped.
 
@@ -30,9 +32,11 @@ In `codex_sdk_persistent`, the same `/api/brain` validation and NDJSON boundary 
 
 The application—not either model—owns approval and state mutation. Direct answers, corrections, and deferrals require explicit Product Manager confirmation. V3 may automatically submit only an exact locked Decision Batch whose one to three entries were individually confirmed and freshly Brain-revalidated. Responses must pass schema and semantic validation before atomically replacing the Specification. Invalid, stale, refused, incomplete, timed-out, interrupted, or provider-error results preserve the last valid revision.
 
+For the current authoritative prompt, the Brain also authors one to five unique Answer Aspects, including at least one required aspect. The Communicator may classify only those IDs as covered, missing, or uncertain from the current bounded Answer Intake. Coverage must contain each active aspect exactly once. Realtime assessment and clarification playback are identity-bound, out-of-band responses with `conversation: "none"`; they cannot change the Specification or call the Brain. A finalized transcript alone creates no Answer Draft. Assessment completion, early review, or the three-contribution/two-clarification bound produces either a validated Communicator Answer Summary or a clearly labeled unassessed fallback. The Product Manager may edit it, and only `Send confirmed summary to Brain` creates one Confirmed Answer from that exact edited text.
+
 Before an interview starts, the Product Manager supplies an Initial Prompt and may add pasted Markdown/plain text or one `.md`, `.txt`, `.pdf`, or `.docx` file. The app validates the agreed size, page, and character limits; prepares an editable source-linked Project Context Digest; exposes known coverage gaps; and requires explicit confirmation. Partial extraction additionally requires acknowledgement. The checkpointable digest retains at most eight verbatim, source-linked context statements of at most 750 characters each; unretained source wording remains only in the active tab’s temporary extraction.
 
-The Brain also maintains the validated Question Roadmap and may issue zero to three pairwise-independent Question Permits. The Communicator presents and clarifies only one permit at a time and creates an editable, non-authoritative Decision Summary. Confirmed wording waits in the Decision Tray. The complete authoritative revision applies first; the Brain then reissues or dependency-invalidates every prior permit, and only valid confirmed work enters one ordered atomic Decision Batch. Stale wording remains visibly Not Applied and never enters the Specification.
+The Brain also maintains the validated Question Roadmap and may issue zero to three pairwise-independent Question Permits. The Communicator presents and clarifies only one permit at a time and creates an editable, non-authoritative Decision Summary. While the exact authoritative request remains active, confirming or deferring one asynchronous job may promote the next unused ordinal from the same current window; it never creates a second Brain request or presents two questions at once. Confirmed wording waits in the Decision Tray. When the result arrives, the application consults current runtime jobs—including a job promoted after request start—stops or pauses its exchange, applies the complete authoritative revision first, then reissues or dependency-invalidates every prior permit. Only valid confirmed work enters one ordered atomic Decision Batch. Stale wording remains visibly Not Applied and never enters the Specification.
 
 `POST /api/brain` returns validated NDJSON. Content-free lifecycle envelopes are bound to request, action, base revision, cancellation epoch, attempt, and monotonic sequence; they contain no prompt, answer, transcript, Specification, provider ID, credential, or raw error text. One terminal result or error closes the stream. Malformed, content-bearing, mismatched, duplicate, late, or interrupted streams fail closed and require explicit retry.
 
@@ -120,23 +124,23 @@ npm run build
 
 The normal test suite uses mocked provider boundaries and requires neither an OpenAI key nor physical audio. The intentionally small Playwright suite verifies:
 
-1. keyboard-driven V3 Prepared Demo preparation, two sequential permitted decisions, revision-first revalidation, one Applied/one Not Applied outcome, 390 px layout, and downloaded Markdown;
+1. keyboard-driven V3.1 Prepared Answer Intake, two sequential permitted decisions, revision-first revalidation, one Applied/one Not Applied outcome, 390 px layout, and downloaded Markdown;
 2. Project Context Digest confirmation, partial-extraction acknowledgement, source provenance, and reload/privacy cleanup;
 3. one typed Live turn that cannot reach the mocked Brain before explicit confirmation or submit twice;
 4. one-Lookahead clarification-to-summary behavior, dependency revalidation, and stale-work isolation;
-5. receipt, editing, and confirmation of a fake-media transcription;
+5. fake-media transcription that remains temporary until exact Answer Aspect coverage produces an editable Communicator summary, followed by exact edited-summary confirmation;
 6. preservation of the last valid Specification after invalid Brain output; and
 7. explicit deferral, finalization with follow-ups, reload recovery, and final export;
 8. Persistent Brain Status and Decision Tray behavior across the prepared async sequence; and
 9. reload recovery that makes no automatic request and requires separate `Revalidate restored decisions` and `Submit restored decisions` actions.
 
-Axe scans cover Start, context review, Interview, Answer Draft, permitted-question/Decision Tray, Persistent Brain Status, and Final Review states for critical/serious violations. Unit and integration coverage includes lifecycle split/coalesced parsing and privacy sentinels, batch ordering/atomicity, revision barriers, checkpoint sanitization/migration, adaptive caps, Realtime identity races, 24 synthetic evaluation fixtures, safe harness defaults, V1/V2 regressions, visual aids, prepared snapshots, and Markdown export.
+Axe scans cover Start, context review, Answer Intake, Answer Summary, permitted-question/Decision Tray, Persistent Brain Status, and Final Review states for critical/serious violations. Unit and integration coverage includes exact Answer Aspect membership, finalized-transcript gating, early-review/late-assessment safety, raw-intake privacy sentinels, sequential permit promotion/current-job revision barriers, lifecycle split/coalesced parsing, batch ordering/atomicity, checkpoint sanitization/migration, adaptive caps, Realtime identity races, 24 synthetic evaluation fixtures, safe harness defaults, V1–V3 regressions, visual aids, prepared snapshots, and Markdown export.
 
 Normal CI must not call OpenAI or depend on microphone hardware. Live smoke testing is opt-in and should be run only with the dedicated project explicitly enabled.
 
 ## Prepared Demo walkthrough
 
-Choose `Run prepared demo`, prepare the bundled `team-billing-project-brief.md`, review its prevalidated Project Context Digest, and select `Confirm prepared digest`. Submit the prepared answer to start the user-paced fixture clock. The demo opens a two-permit Interview Window, presents each permitted decision sequentially, shows its clarification exchange and editable Decision Summary, and requires individual confirmation. It then advances beyond 30 fixture seconds without a real wait, applies the authoritative revision first, revalidates both jobs, keeps one Ready to Apply, marks the other dependency-invalidated Not Applied with `Reuse wording`, automatically applies the one-entry prepared Decision Batch, and enters Final Review.
+Choose `Run prepared demo`, prepare the bundled `team-billing-project-brief.md`, review its prevalidated Project Context Digest, and select `Confirm prepared digest`. The V3.1 frame shows multiple Brain-authored Answer Aspects, one missing aspect, one prepared clarification, and an editable Answer Summary; confirm that summary to start the user-paced fixture clock. The demo then opens a two-permit Interview Window, presents each permitted decision sequentially, shows its clarification exchange and editable Decision Summary, and requires individual confirmation. It advances beyond 30 fixture seconds without a real wait, applies the authoritative revision first, revalidates both jobs, keeps one Ready to Apply, marks the other dependency-invalidated Not Applied with `Reuse wording`, automatically applies the one-entry prepared Decision Batch, and enters Final Review.
 
 The walkthrough makes no `/api/brain`, `/api/realtime`, `/api/context`, OpenAI, Codex, public-search, microphone, or user-file request. Browser verification asserts those boundaries directly.
 
@@ -175,16 +179,21 @@ Run this manually in current desktop Chrome on the actual presentation hardware.
 - [ ] Prompt playback keeps the microphone track disabled; playback completion enables listening.
 - [ ] `Answer now` stops prompt playback and starts listening without submitting anything.
 - [ ] Semantic VAD tolerates representative pauses and background noise.
-- [ ] The finalized transcription receives focus as an editable Answer Draft.
-- [ ] Editing and `Send to Brain` submit the edited text exactly once; recording alone submits nothing.
-- [ ] `Record again`, voice mute, microphone resume, reconnect, and Live text fallback work.
+- [ ] A finalized transcription starts `Assessing answer coverage` and does not immediately create an Answer Draft or Brain request.
+- [ ] Coverage shows every Brain-authored Answer Aspect exactly once and never adds a new aspect.
+- [ ] A clarification is spoken only for a missing or uncertain aspect; no more than two clarifications or three contributions are accepted.
+- [ ] `Review answer now` preserves captured wording truthfully; a late assessment cannot replace an already reviewable draft.
+- [ ] The editable Answer Summary receives focus and keeps missing/uncertain aspects visible.
+- [ ] Editing and `Send confirmed summary to Brain` submit that exact edited summary once; recording, transcription, assessment, and playback submit nothing.
+- [ ] `Record again`, return to clarification, voice mute, microphone resume, reconnect, and truthful `Coverage not assessed` fallback work.
+- [ ] If a validated revision arrives during accepted speech, assessment, playback, or editing, preserved wording is visibly Revalidation Pending and cannot be confirmed against stale scope.
 - [ ] Realtime capacity/rate-limit failure preserves confirmed state and offers retry or explicit Prepared Demo restart.
 - [ ] Echo cancellation prevents speaker playback from becoming a Product Manager turn.
 - [ ] Standard API key, raw audio, SDP, transcript text, and Specification content do not appear in application logs.
 
 ## Privacy and persistence
 
-In default `one_shot` mode, Spec Grill does not persist raw audio, original uploads, full extractions, or Interview Session content on its servers. Confirmed revisions, the bounded confirmed digest, and at most three individually confirmed queued Decision Summaries/deferrals may be stored temporarily in the current tab's `sessionStorage` and expire after 30 minutes. Original file bytes are discarded after preparation; temporary source extraction remains only in the active tab and is lost on reload. Drafts, clarification turns, transcripts, lifecycle/provider state, Not Applied history, client secrets, raw audio, and search content are excluded. Restored decisions never auto-submit: revalidation and submission are two explicit actions. Explicit exit/reset and expiry clear app-held checkpoint state.
+In default `one_shot` mode, Spec Grill does not persist raw audio, original uploads, full extractions, or Interview Session content on its servers. Confirmed revisions, the bounded confirmed digest, and at most three individually confirmed queued Decision Summaries/deferrals may be stored temporarily in the current tab's `sessionStorage` and expire after 30 minutes. Original file bytes are discarded after preparation; temporary source extraction remains only in the active tab and is lost on reload. Raw Answer Intake, transcript segments, assessment prompts/JSON, Answer Drafts, Answer Summaries before confirmation, Answer Intake clarifications, Decision Summary clarification turns, lifecycle/provider state, Not Applied history, client secrets, raw audio, and search content are excluded from checkpoints and export. Raw intake and intermediate assessment/clarification content are also excluded from Brain requests and application logs. Restored decisions never auto-submit: revalidation and submission are two explicit actions. Explicit exit/reset and expiry clear app-held checkpoint state.
 
 The local `codex_sdk_persistent` hackathon path is an explicit exception: the isolated `CODEX_BRAIN_HOME` retains the Codex thread needed for same-machine resume, while the browser checkpoint stores its opaque thread ID. Do not treat the Session Link as a secret-sharing or authentication mechanism. The app makes no `store:false`, Zero Data Retention, provider-cancellation, provider thread-deletion, cross-instance durability, or production privacy claim for this mode. Deleting the local store only removes local resume state.
 
@@ -196,16 +205,16 @@ Live input is processed by OpenAI under the configured project's data controls. 
 
 The implementation was built as four bounded Codex workstreams coordinated by a root integrator:
 
-- **Root integration:** frozen V3 contracts, single-request/revision ordering, queue and batch orchestration, adaptive caps, explicit reload gates, checkpoint sanitization, and Live/Prepared isolation.
-- **Brain API:** streamed content-free lifecycle delivery, Interview Window and exact disposition validation, GPT-5.6 one-shot and responses-native adapters, local Codex evaluation isolation, the opt-in persistent Codex SDK hackathon adapter, evaluation fixtures/gates, repair, and typed failures.
-- **Realtime voice:** exchange/permit/cancellation identity, bounded provider-event deduplication, mid-turn revalidation safety, sequential permitted clarification, microphone gating, and text fallback.
-- **Experience/demo:** Persistent Brain Status, Decision Tray, one-active-question presentation, local-only Session Link presentation, External Evidence rendering/export, two-permit Prepared fixtures, Visual Aids, local audio, Final Review, and browser-generated Markdown.
-- **Verification/docs:** independent NDJSON privacy, batch atomicity, checkpoint/reload, safe and experimental harness defaults, persistent-thread limitation documentation, axe/390 px, Prepared isolation, V1/V2 regression, and browser verification plus this documentation.
+- **Root integration:** frozen V3/V3.1 contracts, single-request/revision ordering, sequential permit promotion, current-job revision barriers, queue and batch orchestration, adaptive caps, explicit reload gates, checkpoint sanitization, and Live/Prepared isolation.
+- **Brain API:** streamed content-free lifecycle delivery, Brain-authored Answer Aspect validation, Interview Window and exact disposition validation, GPT-5.6 one-shot and responses-native adapters, local Codex evaluation isolation, the opt-in persistent Codex SDK hackathon adapter, evaluation fixtures/gates, repair, and typed failures.
+- **Realtime voice:** exchange/permit/cancellation identity, bounded Answer Intake assessment and clarification playback, exact coverage validation, raw-intake cleanup, bounded provider-event deduplication, mid-turn revalidation safety, microphone gating, and text fallback.
+- **Experience/demo:** Answer Intake and editable Answer Summary presentation, Persistent Brain Status, Decision Tray, one-active-question presentation, local-only Session Link presentation, External Evidence rendering/export, V3.1 Prepared fixtures, Visual Aids, local audio, Final Review, and browser-generated Markdown.
+- **Verification/docs:** independent Answer Intake authority/privacy, sequential-promotion barrier, NDJSON privacy, batch atomicity, checkpoint/reload, safe and experimental harness defaults, persistent-thread limitation documentation, axe/390 px, Prepared isolation, V1–V3 regression, and browser verification plus this documentation.
 
-The contribution record describes repository work, not Prepared fixture output. Automated verification uses mocked provider boundaries. On 2026-07-21, the opt-in local smoke validated a live requested `gpt-5.6` / actual `gpt-5.6-sol` revision through the V3 NDJSON route, and the live Realtime session endpoint returned 200 while its secret-bearing body was discarded. The Product Manager also reported the basic Chrome microphone-to-editable-Answer-Draft flow passing without premature Brain submission. Advanced voice/media races, deployment, and provider-retention verification are not claimed here.
+The contribution record describes repository work, not Prepared fixture output. Automated verification uses mocked provider boundaries. On 2026-07-21, the opt-in local smoke validated a live requested `gpt-5.6` / actual `gpt-5.6-sol` revision through the V3 NDJSON route, and the live Realtime session endpoint returned 200 while its secret-bearing body was discarded. The Product Manager also reported the earlier basic Chrome microphone flow passing without premature Brain submission. V3.1 physical-microphone Answer Intake, advanced voice/media races, deployment, and provider-retention verification are not claimed here.
 
 ## MVP limits
 
 There is no authentication, collaboration, database persistence, meeting integration, payment processing, analytics, arbitrary model-authored markup, multilingual mode, or cross-device history. The hackathon Session Link is a local resume pointer, not authenticated collaboration or durable history. Voice support targets current desktop Chrome; other browsers and mobile fall back to the first-class text path.
 
-See [IMPLEMENTATION_HANDOFF.md](./IMPLEMENTATION_HANDOFF.md), [V2_IMPLEMENTATION_HANDOFF.md](./V2_IMPLEMENTATION_HANDOFF.md), [V3_IMPLEMENTATION_HANDOFF.md](./V3_IMPLEMENTATION_HANDOFF.md), [CONTEXT.md](./CONTEXT.md), [docs/ownership.md](./docs/ownership.md), and [docs/adr](./docs/adr) for the delivered and approved product language, implementation ownership, and architecture decisions.
+Authoritative read order: [IMPLEMENTATION_HANDOFF.md](./IMPLEMENTATION_HANDOFF.md), [V2_IMPLEMENTATION_HANDOFF.md](./V2_IMPLEMENTATION_HANDOFF.md), [V3_IMPLEMENTATION_HANDOFF.md](./V3_IMPLEMENTATION_HANDOFF.md), [V3_1_IMPLEMENTATION_HANDOFF.md](./V3_1_IMPLEMENTATION_HANDOFF.md), [CONTEXT.md](./CONTEXT.md), every record in [docs/adr](./docs/adr), this README, [CHANGELOG.md](./CHANGELOG.md), and [docs/ownership.md](./docs/ownership.md).

@@ -136,6 +136,115 @@ function questionsShareDecision(detailed: string, spoken: string): boolean {
   return [...spokenWords].some((word) => detailedWords.has(word));
 }
 
+const answerAspectScopeStopWords = new Set([
+  ...insignificantWords,
+  "answer",
+  "aspect",
+  "current",
+  "decision",
+  "detail",
+  "details",
+  "information",
+  "manager",
+  "optional",
+  "product",
+  "provide",
+  "required",
+  "specific",
+]);
+
+function answerAspectWords(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .split(/\s+/)
+      .filter((word) => word.length > 2 && !answerAspectScopeStopWords.has(word)),
+  );
+}
+
+/** Enforces the Brain-owned aspect boundary even when a caller bypasses Zod.
+ * Decision scope is intentionally limited to the prompt itself plus an optional
+ * matching roadmap topic; confirmed context cannot silently broaden it. */
+export function validatePromptAnswerAspects(
+  prompt: InterviewPrompt,
+  path: string,
+  additionalDecisionScope: readonly string[] = [],
+): string[] {
+  const errors: string[] = [];
+  const candidate = (prompt as unknown as { answerAspects?: unknown }).answerAspects;
+  if (!Array.isArray(candidate) || candidate.length < 1 || candidate.length > 5) {
+    errors.push(`${path}.answerAspects must contain one to five Answer Aspects`);
+    if (!Array.isArray(candidate)) return errors;
+  }
+
+  const ids = new Set<string>();
+  const labels = new Set<string>();
+  const meanings = new Set<string>();
+  let hasRequired = false;
+  const decisionWords = answerAspectWords([
+    prompt.decisionKey,
+    prompt.detailedQuestion,
+    prompt.spokenQuestion,
+    prompt.whyItMatters,
+    ...prompt.decisionImpact,
+    ...additionalDecisionScope,
+  ].join(" "));
+
+  for (const [index, rawAspect] of candidate.entries()) {
+    if (!rawAspect || typeof rawAspect !== "object") {
+      errors.push(`${path}.answerAspects[${index}] is invalid`);
+      continue;
+    }
+    const aspect = rawAspect as { id?: unknown; label?: unknown; description?: unknown; required?: unknown };
+    const id = typeof aspect.id === "string" ? aspect.id : "";
+    const label = typeof aspect.label === "string" ? aspect.label : "";
+    const description = typeof aspect.description === "string" ? aspect.description : "";
+    if (!/^ASPECT-[0-9]{3,}$/.test(id)) {
+      errors.push(`${path}.answerAspects[${index}].id must match /^ASPECT-[0-9]{3,}$/`);
+    } else if (ids.has(id)) {
+      errors.push(`${path}.answerAspects contains duplicate Answer Aspect ID ${id}`);
+    }
+    ids.add(id);
+    const normalizedLabel = label.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const meaning = `${label} ${description}`.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if ((normalizedLabel && labels.has(normalizedLabel)) || (meaning && meanings.has(meaning))) {
+      errors.push(`${path}.answerAspects must have unique, non-overlapping meanings`);
+    }
+    if (normalizedLabel) labels.add(normalizedLabel);
+    if (meaning) meanings.add(meaning);
+    if (aspect.required === true) hasRequired = true;
+
+    const scopedWords = answerAspectWords(`${label} ${description}`);
+    if (scopedWords.size === 0 || ![...scopedWords].some((word) => decisionWords.has(word))) {
+      errors.push(`${path}.answerAspects[${index}] is outside the current decision scope`);
+    }
+  }
+  if (!hasRequired) errors.push(`${path}.answerAspects requires at least one required aspect`);
+  return errors;
+}
+
+export function validateAnswerAspectIdOwnership(prompts: readonly InterviewPrompt[]): string[] {
+  const errors: string[] = [];
+  const owners = new Map<string, string>();
+  for (const prompt of prompts) {
+    const aspects = (prompt as unknown as { answerAspects?: unknown }).answerAspects;
+    if (!Array.isArray(aspects)) continue;
+    for (const aspect of aspects) {
+      if (!aspect || typeof aspect !== "object") continue;
+      const id = (aspect as { id?: unknown }).id;
+      if (typeof id !== "string") continue;
+      const owner = owners.get(id);
+      if (owner && owner !== prompt.id) {
+        errors.push(`${id}: Answer Aspect ID cannot be reused across prompt decisions`);
+      } else {
+        owners.set(id, prompt.id);
+      }
+    }
+  }
+  return errors;
+}
+
 function setEquals(actual: readonly string[], expected: readonly string[]): boolean {
   const left = new Set(actual);
   const right = new Set(expected);
@@ -252,6 +361,7 @@ function validatePrompt(
   path: "nextPrompt" | "questionRoadmap.lookaheadApproval.prompt",
   errors: string[],
 ): void {
+  errors.push(...validatePromptAnswerAspects(prompt, path));
   if (!exactlyOneQuestion(prompt.detailedQuestion)) {
     errors.push(`${path}.detailedQuestion must contain exactly one question`);
   }
@@ -633,6 +743,10 @@ export function validateBrainOutput(
   }
 
   validateRoadmapOutput(request, output, new Set(outputItems.keys()), confirmedEvidence, errors);
+  errors.push(...validateAnswerAspectIdOwnership([
+    ...(output.nextPrompt ? [output.nextPrompt] : []),
+    ...(output.questionRoadmap.lookaheadApproval ? [output.questionRoadmap.lookaheadApproval.prompt] : []),
+  ]));
 
   if (demoMarker.test(JSON.stringify(output))) errors.push("live output contains a Prepared Demo marker");
 

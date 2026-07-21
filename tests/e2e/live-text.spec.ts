@@ -19,7 +19,7 @@ test("submits one mocked typed Live turn only after explicit confirmation", asyn
   expect(calls).toBe(1);
   await expectNoSeriousAxeViolations(page);
 
-  await page.getByRole("button", { name: "Send to Brain" }).click();
+  await page.getByRole("button", { name: "Send confirmed summary to Brain" }).click();
   await expect.poll(() => calls).toBe(2);
   await expect.poll(() => requests.length).toBe(2);
   expect(requests[1].codexThreadId).toBe(threadId);

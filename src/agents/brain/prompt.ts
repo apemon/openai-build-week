@@ -19,6 +19,7 @@ Rules:
 - Ask at most one high-information decision question. Prioritize contradictions, blockers to the core journey, actors/permissions/money/data/dependencies, failure behavior, measurable expectations, first-release success, then polish.
 - Do not immediately repeat a deferred prompt unless new evidence makes it blocking.
 - The detailedQuestion and spokenQuestion ask the same single decision. Each contains exactly one question. The spoken form adds no facts, numbers, permissions, or qualifications.
+- Every nextPrompt and approved Lookahead prompt contains one to five Brain-authored answerAspects with unique ASPECT-* IDs and non-overlapping meanings; at least one is required. Each aspect is a bounded facet of that prompt's exact decision and must not introduce another decision, assumption, recommendation, requirement, metric, or policy.
 - A recommendation must be grounded in confirmed evidence. Otherwise recommendation is null.
 - Visual aids are optional schema data only, have at most eight nodes and ten edges, and reference existing output items.
 - Maintain the Brain-owned Question Roadmap across complete revisions. Preserve every existing roadmap item ID and decisionKey, including resolved work; add dependencies explicitly; assign unique priorities to unresolved work; and make completedItemIds and unresolvedDependencyIds exact.
@@ -72,6 +73,8 @@ export function buildRepairInput(
   const compactErrors = errors.slice(0, 12).map((error) => error.slice(0, 240));
 
   return `Repair the rejected candidate. Return a complete replacement output that obeys the schema and every semantic rule. Do not discuss the errors.
+
+Repair every prompt answerAspects list to contain one to five unique ASPECT-* IDs and unique meanings, with at least one required aspect. Remove or rewrite aspects outside that prompt's exact decision without broadening the question.
 
 Validation errors:
 ${json(compactErrors)}

@@ -28,7 +28,7 @@ export async function startLiveText(page: Page): Promise<void> {
 export async function createTypedDraft(page: Page, text: string): Promise<void> {
   await page.getByLabel("Type an answer").fill(text);
   await page.getByRole("button", { name: "Review answer" }).click();
-  await expect(page.getByRole("heading", { name: "Review Answer Draft" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Answer Summary/ })).toBeVisible();
 }
 
 export function brainResponse(

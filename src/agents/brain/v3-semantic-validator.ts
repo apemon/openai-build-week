@@ -17,7 +17,12 @@ import type {
   V3Specification,
 } from "@/domain/v3-schemas";
 
-import { validateBrainOutput, validateBrainRequest } from "./semantic-validator";
+import {
+  validateBrainOutput,
+  validateBrainRequest,
+  validateAnswerAspectIdOwnership,
+  validatePromptAnswerAspects,
+} from "./semantic-validator";
 
 const DEFERRED_WITHOUT_CONTEXT = "Deferred without additional context.";
 
@@ -302,6 +307,12 @@ export function validateV3BrainOutput(
   });
   errors.push(...window.errors);
   for (const [index, permit] of output.interviewWindow.permits.entries()) {
+    const roadmapItem = output.questionRoadmap.items.find((item) => item.id === permit.roadmapItemId);
+    errors.push(...validatePromptAnswerAspects(
+      permit.prompt,
+      `interviewWindow.permits[${index}].prompt`,
+      roadmapItem ? [roadmapItem.decisionKey, roadmapItem.topic] : [],
+    ));
     if (permit.ordinal !== index + 1) errors.push(`${permit.id}: permit ordinal must match Brain-issued presentation order`);
     if (permit.roadmapItemId === output.questionRoadmap.currentDecisionItemId) {
       errors.push(`${permit.id}: Interview Window cannot repeat the current authoritative decision`);
@@ -310,6 +321,10 @@ export function validateV3BrainOutput(
       errors.push(`${permit.id}: Interview Window prompt identity must be distinct from the current prompt`);
     }
   }
+  errors.push(...validateAnswerAspectIdOwnership([
+    ...(output.nextPrompt ? [output.nextPrompt] : []),
+    ...output.interviewWindow.permits.map((permit) => permit.prompt),
+  ]));
 
   if (request.operation === "revalidate_restored") {
     validateRestoredDispositions(request, output.interviewWindow, output.priorPermitDispositions, errors);

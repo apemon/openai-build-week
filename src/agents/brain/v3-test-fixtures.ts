@@ -74,6 +74,20 @@ export function validV3BrainOutput() {
       whyItMatters: "Billing permissions affect authorization and support risk.",
       confirmedContext: ["team billing"],
       decisionImpact: ["Defines the authorization boundary."],
+      answerAspects: [
+        {
+          id: "ASPECT-101",
+          label: "Authorized roles",
+          description: "The roles that can manage team billing.",
+          required: true,
+        },
+        {
+          id: "ASPECT-102",
+          label: "Permission scope",
+          description: "The billing actions each authorized role can perform.",
+          required: false,
+        },
+      ],
       recommendation: null,
       visualAid: null,
     },

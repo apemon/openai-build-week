@@ -12,6 +12,8 @@ describe("PreparedDemoRunner", () => {
     expect(steps.at(-1)?.nextPrompt).toBeNull();
     expect(steps.at(-1)?.specification.readiness.status).toBe("ready_with_follow_ups");
     expect(runner.complete).toBe(true);
+    expect(steps.every((step) => step.prompt.answerAspects.length >= 1 && step.prompt.answerAspects.length <= 5)).toBe(true);
+    expect(steps.every((step) => step.prompt.answerAspects.some((aspect) => aspect.required))).toBe(true);
   });
 
   it("keeps prepared audio local", () => {

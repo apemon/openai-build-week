@@ -58,4 +58,19 @@ describe("runV3Brain", () => {
     expect(events.some((event) => event.kind === "repair_started" && event.attempt === 2)).toBe(true);
     expect(events.map((event) => event.sequence)).toEqual(events.map((_, index) => index));
   });
+
+  it("repairs a schema-invalid missing Answer Aspect list with the frozen V3.1 instructions", async () => {
+    const invalid = structuredClone(validV3BrainOutput());
+    invalid.nextPrompt!.answerAspects = [];
+    const responses = client([provider(invalid), provider(validV3BrainOutput())]);
+
+    const response = await runV3Brain(validV3BrainRequest(), { responses });
+
+    expect(response.provenance.repairAttempted).toBe(true);
+    expect(responses.create).toHaveBeenCalledTimes(2);
+    const firstBody = responses.create.mock.calls[0][0] as { input: Array<{ role: string; content: string }> };
+    expect(firstBody.input[0].content).toContain("Every non-null nextPrompt and every Question Permit prompt");
+    const repairBody = responses.create.mock.calls[1][0] as { input: Array<{ role: string; content: string }> };
+    expect(repairBody.input[1].content).toContain("Rebuild every invalid answerAspects list");
+  });
 });

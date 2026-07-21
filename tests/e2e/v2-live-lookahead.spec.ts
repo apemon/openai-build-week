@@ -68,7 +68,7 @@ test("deduplicates confirmation and quarantines a clarified summary after depend
   await startLiveText(page);
   expect(initializeCalls).toBe(1);
   await createTypedDraft(page, "Workspace Owners approve billing changes.");
-  await page.getByRole("button", { name: "Send to Brain" }).dblclick();
+  await page.getByRole("button", { name: "Send confirmed summary to Brain" }).dblclick();
   await expect.poll(() => answerCalls).toBe(1);
   await expect(page.getByText("One safe lookahead", { exact: true })).toHaveCount(1);
   await expect(page.getByRole("heading", { name: teamBillingPrompts[2]!.detailedQuestion })).toBeVisible();

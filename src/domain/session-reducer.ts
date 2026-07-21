@@ -75,6 +75,10 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
     case "SPEECH_STOPPED":
       next = state.phase === "speech_detected" ? { ...state, phase: "transcribing" } : state;
       break;
+    case "ANSWER_INTAKE_STARTED":
+      if (!state.currentPrompt || state.pendingRequest) return state;
+      next = { ...state, phase: "collecting_answer", answerDraft: null, error: null };
+      break;
     case "ANSWER_DRAFT_READY":
       next = { ...state, phase: "reviewing_answer", answerDraft: event.draft };
       break;

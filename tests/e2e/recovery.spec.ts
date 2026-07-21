@@ -25,11 +25,11 @@ test("keeps the last valid Specification after an invalid Brain response", async
 
   await startLiveText(page);
   await createTypedDraft(page, "We need team billing.");
-  await page.getByRole("button", { name: "Send to Brain" }).click();
+  await page.getByRole("button", { name: "Send confirmed summary to Brain" }).click();
   await expect(page.getByRole("heading", { name: "Team billing for a SaaS workspace" })).toBeVisible();
 
   await createTypedDraft(page, "Owners should manage billing.");
-  await page.getByRole("button", { name: "Send to Brain" }).click();
+  await page.getByRole("button", { name: "Send confirmed summary to Brain" }).click();
   await expect(page.getByRole("alert", { name: "Live interview needs attention" })).toContainText("invalid revision");
   await expect(page.getByRole("heading", { name: "Team billing for a SaaS workspace" })).toBeVisible();
   await expect(page.getByText("Revision 2")).toBeVisible();

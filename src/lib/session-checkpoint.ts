@@ -23,7 +23,7 @@ export function createCheckpoint(state: SessionState, now = new Date()): Session
     processingStage: "idle",
     phase: state.phase === "analyzing" && state.revision === 0 && state.confirmedContextDigest
       ? "connecting"
-      : ["reviewing_answer", "analyzing", "clarifying_lookahead", "reviewing_decision_summary", "queued_decision_summary"].includes(state.phase)
+      : ["collecting_answer", "reviewing_answer", "analyzing", "clarifying_lookahead", "reviewing_decision_summary", "queued_decision_summary"].includes(state.phase)
         ? "presenting_prompt"
         : state.phase,
   };

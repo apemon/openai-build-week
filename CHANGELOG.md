@@ -1,5 +1,15 @@
 # Changelog
 
+## V3.1 natural Answer Intake extension
+
+- Added one to five unique Brain-authored Answer Aspects to every Interview Prompt, including at least one required aspect, and migrated prepared, synthetic, and legacy cross-module fixtures to the stricter contract.
+- Replaced direct transcription-to-draft behavior with a bounded, identity-scoped Answer Intake of at most three temporary Product Manager contributions. A finalized transcript triggers assessment and does not immediately create a draft or Brain request.
+- Added exact per-aspect covered/missing/uncertain assessment, at most two one-at-a-time clarifications, early review, truthful unassessed fallback, editable Communicator Answer Summary, and explicit `Send confirmed summary to Brain` wording.
+- Only the exact edited and confirmed Answer Summary becomes one Confirmed Answer. Raw intake, transcript segments, assessment prompts/JSON, clarification wording, and unconfirmed summaries remain outside Brain requests, checkpoints, logs, and Markdown export.
+- Added sequential promotion of the next unused permit after a confirmed or permitted-deferred asynchronous job while preserving one active question and the same single authoritative Brain request. The response barrier consults current runtime jobs, including a job promoted after request start.
+- Extended Prepared Demo with a deterministic Answer Intake frame containing multiple aspects, one missing aspect, one prepared clarification, and an editable summary without Realtime, microphone, Brain, Codex, OpenAI, search, context-route, or user-file access.
+- Added independent exact-coverage, transcript gating, early-review/late-assessment, raw-intake privacy, sequential promotion/current-job barrier, fake-media, keyboard, axe, 390 px, Prepared isolation, and V1–V3 regression verification.
+
 ## Local persistent Codex Brain hackathon extension
 
 - Added an opt-in `codex_sdk_persistent` Live Brain behind `BRAIN_EXPERIMENTAL_HARNESSES_ENABLED=true`, using the existing `/api/brain` NDJSON route and server-side OpenAI credential boundary.

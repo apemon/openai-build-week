@@ -1,5 +1,15 @@
 import { lookaheadApprovalSchema } from "@/domain/schemas";
-import type { LookaheadApproval } from "@/domain/types";
+import { interviewPromptSchema } from "@/domain/schemas";
+import {
+  MAX_ANSWER_CLARIFICATIONS,
+  MAX_ANSWER_INTAKE_CONTRIBUTIONS,
+  validateAnswerIntakeAssessment,
+} from "@/domain/answer-intake";
+import type {
+  AnswerIntakeAssessment,
+  InterviewPrompt,
+  LookaheadApproval,
+} from "@/domain/types";
 import {
   exchangeIdentitySchema,
   questionPermitSchema,
@@ -36,6 +46,10 @@ export class MockCommunicatorTransport implements ClarificationCommunicatorTrans
   private cancelEpoch = 0;
   private questionsPaused = false;
   private acceptedCapturePending = false;
+  private activeAnswerPrompt: InterviewPrompt | null = null;
+  private readonly answerContributions: string[] = [];
+  private latestAnswerAssessment: AnswerIntakeAssessment | null = null;
+  private answerClarificationCount = 0;
   private v3EventSequence = 0;
 
   constructor(options: MockCommunicatorTransportOptions = {}) {
@@ -60,6 +74,7 @@ export class MockCommunicatorTransport implements ClarificationCommunicatorTrans
     this.activePermit = null;
     this.activeIdentity = null;
     this.acceptedCapturePending = false;
+    this.clearAnswerIntake();
     this.clarificationTexts.length = 0;
     this.microphoneState = "off";
     this.emit({ type: "disconnected", retryable: false });
@@ -96,6 +111,62 @@ export class MockCommunicatorTransport implements ClarificationCommunicatorTrans
     return this.microphoneState;
   }
 
+  beginAuthoritativeAnswer(prompt: InterviewPrompt, identity: ExchangeIdentity): void {
+    if (!this.connected) throw new Error("Realtime Communicator is not connected.");
+    const parsedPrompt = interviewPromptSchema.parse(prompt);
+    const parsedIdentity = parseAuthoritativeIdentity(identity, parsedPrompt.id);
+    if (this.activePermit) throw new Error("A different Communicator exchange is already active.");
+    if (this.activeIdentity && !sameIdentity(this.activeIdentity, parsedIdentity)) this.clearAnswerIntake();
+    this.adoptEpoch(parsedIdentity.cancelEpoch);
+    this.activeIdentity = parsedIdentity;
+    this.activePermit = null;
+    this.activeAnswerPrompt = parsedPrompt;
+    this.answerContributions.length = 0;
+    this.latestAnswerAssessment = null;
+    this.answerClarificationCount = 0;
+    this.setMicrophoneEnabled(false);
+    this.emitV3({ type: "prompt_playback_started", identity: parsedIdentity, providerEventId: this.nextEventId() });
+    if (this.autoCompletePrompt) queueMicrotask(() => this.completePermittedPrompt());
+  }
+
+  answerAuthoritativeNow(identity: ExchangeIdentity): void {
+    this.requireActiveAnswerIdentity(identity);
+    this.setMicrophoneEnabled(true);
+  }
+
+  submitAnswerIntakeContribution(text: string, identity: ExchangeIdentity): void {
+    this.requireActiveAnswerIdentity(identity);
+    const value = text.trim();
+    if (!value || value.length > 4_000) throw new Error("Answer Intake contribution is invalid.");
+    if (this.answerContributions.length >= MAX_ANSWER_INTAKE_CONTRIBUTIONS) {
+      throw new Error("Answer Intake has reached its contribution limit.");
+    }
+    this.answerContributions.push(value);
+    this.setMicrophoneEnabled(false);
+  }
+
+  speakAnswerClarification(question: string, aspectIds: string[], identity: ExchangeIdentity): void {
+    this.requireActiveAnswerIdentity(identity);
+    if (this.answerClarificationCount >= MAX_ANSWER_CLARIFICATIONS) {
+      throw new Error("Answer Intake has reached its clarification limit.");
+    }
+    if (
+      !this.latestAnswerAssessment?.clarificationQuestion
+      || this.latestAnswerAssessment.clarificationQuestion !== question.trim()
+      || !sameMembers(this.latestAnswerAssessment.clarificationAspectIds, aspectIds)
+    ) throw new Error("Clarification does not match the latest validated Coverage Assessment.");
+    this.answerClarificationCount += 1;
+    this.setMicrophoneEnabled(false);
+    this.emitV3({ type: "answer_clarification_started", identity, providerEventId: this.nextEventId() });
+  }
+
+  finishAuthoritativeAnswer(identity: ExchangeIdentity): void {
+    this.requireActiveAnswerIdentity(identity);
+    this.setMicrophoneEnabled(false);
+    this.activeIdentity = null;
+    this.clearAnswerIntake();
+  }
+
   speakPromptWithIdentity(identity: ExchangeIdentity, spokenQuestion: string): void {
     void spokenQuestion;
     if (!this.connected) throw new Error("Realtime Communicator is not connected.");
@@ -103,7 +174,7 @@ export class MockCommunicatorTransport implements ClarificationCommunicatorTrans
     if (parsed.kind !== "authoritative_or_app_prompt") {
       throw new Error("Authoritative prompt speech requires a non-permitted Exchange Identity.");
     }
-    if (parsed.cancelEpoch !== this.cancelEpoch) throw new Error("Exchange cancellation epoch is stale.");
+    this.adoptEpoch(parsed.cancelEpoch);
     if (this.activeIdentity) throw new Error("A different identity-bound exchange is already active.");
     this.activeIdentity = parsed;
     this.activePermit = null;
@@ -123,7 +194,7 @@ export class MockCommunicatorTransport implements ClarificationCommunicatorTrans
   beginPermittedExchange(permit: QuestionPermit, identity: ExchangeIdentity): void {
     if (!this.connected) throw new Error("Realtime Communicator is not connected.");
     const scope = parsePermittedScope(permit, identity);
-    if (scope.identity.cancelEpoch !== this.cancelEpoch) throw new Error("Exchange cancellation epoch is stale.");
+    this.adoptEpoch(scope.identity.cancelEpoch);
     if (this.activeIdentity && !sameIdentity(this.activeIdentity, scope.identity)) {
       throw new Error("A different permitted exchange is already active.");
     }
@@ -187,6 +258,7 @@ export class MockCommunicatorTransport implements ClarificationCommunicatorTrans
     this.activePermit = null;
     this.activeIdentity = null;
     this.questionsPaused = false;
+    this.clearAnswerIntake();
     this.setMicrophoneEnabled(false);
   }
 
@@ -313,6 +385,37 @@ export class MockCommunicatorTransport implements ClarificationCommunicatorTrans
     });
   }
 
+  simulateAnswerIntakeAssessment(
+    candidate: unknown,
+    identity = this.activeIdentity,
+  ): boolean {
+    if (!identity || !this.activeAnswerPrompt || !sameIdentity(identity, this.activeIdentity)) return false;
+    const validated = validateAnswerIntakeAssessment(this.activeAnswerPrompt, candidate);
+    if (!validated.valid || !validated.assessment) return false;
+    this.latestAnswerAssessment = validated.assessment;
+    this.emitV3({
+      type: "answer_intake_assessed",
+      assessment: validated.assessment,
+      identity,
+      providerEventId: this.nextEventId(),
+    });
+    return true;
+  }
+
+  simulateAnswerClarificationDone(identity = this.activeIdentity): void {
+    if (!identity || !this.activeAnswerPrompt || !sameIdentity(identity, this.activeIdentity)) return;
+    this.setMicrophoneEnabled(true);
+    this.emitV3({
+      type: "answer_clarification_done",
+      identity,
+      providerEventId: this.nextEventId(),
+    });
+  }
+
+  getAnswerIntakeContributions(): string[] {
+    return [...this.answerContributions];
+  }
+
   simulateV3Event(event: V3CommunicatorEvent): void {
     this.emitV3(event);
   }
@@ -353,6 +456,29 @@ export class MockCommunicatorTransport implements ClarificationCommunicatorTrans
     if (parsed.cancelEpoch !== this.cancelEpoch) throw new Error("Exchange cancellation epoch is stale.");
   }
 
+  private requireActiveAnswerIdentity(identity: ExchangeIdentity): void {
+    const parsed = parseAuthoritativeIdentity(identity, this.activeAnswerPrompt?.id);
+    if (!this.activeAnswerPrompt || !this.activeIdentity || !sameIdentity(parsed, this.activeIdentity)) {
+      throw new Error("Exchange identity does not match the active Answer Intake.");
+    }
+    if (parsed.cancelEpoch !== this.cancelEpoch) throw new Error("Exchange cancellation epoch is stale.");
+  }
+
+  private adoptEpoch(epoch: number): void {
+    if (epoch === this.cancelEpoch) return;
+    if (!Number.isInteger(epoch) || epoch < this.cancelEpoch || this.activeIdentity) {
+      throw new Error("Exchange cancellation epoch is stale.");
+    }
+    this.cancelEpoch = epoch;
+  }
+
+  private clearAnswerIntake(): void {
+    this.activeAnswerPrompt = null;
+    this.answerContributions.length = 0;
+    this.latestAnswerAssessment = null;
+    this.answerClarificationCount = 0;
+  }
+
   private advanceEpoch(nextCancelEpoch: number): void {
     if (!Number.isInteger(nextCancelEpoch) || nextCancelEpoch <= this.cancelEpoch) {
       throw new Error("Cancellation epoch must advance monotonically.");
@@ -382,6 +508,23 @@ function parsePermittedScope(permit: QuestionPermit, identity: ExchangeIdentity)
     || parsedIdentity.promptId !== parsedPermit.prompt.id
   ) throw new Error("Exchange identity does not match the Question Permit.");
   return { permit: parsedPermit, identity: parsedIdentity };
+}
+
+function parseAuthoritativeIdentity(identity: ExchangeIdentity, promptId?: string) {
+  const parsed = exchangeIdentitySchema.parse(identity);
+  if (
+    parsed.kind !== "authoritative_or_app_prompt"
+    || parsed.permitId !== null
+    || (promptId !== undefined && parsed.promptId !== promptId)
+  ) throw new Error("Exchange identity does not match the authoritative Interview Prompt.");
+  return parsed;
+}
+
+function sameMembers(left: string[], right: string[]): boolean {
+  return left.length === right.length
+    && new Set(left).size === left.length
+    && new Set(right).size === right.length
+    && left.every((value) => right.includes(value));
 }
 
 function sameIdentity(left: ExchangeIdentity | null, right: ExchangeIdentity | null): boolean {

@@ -27,6 +27,10 @@ export const initialInterviewPrompt: InterviewPrompt = {
   whyItMatters: "This gives the interview a concrete product problem to clarify.",
   confirmedContext: [],
   decisionImpact: ["Sets the scope for the first specification revision."],
+  answerAspects: [
+    { id: "ASPECT-001", label: "Product", description: "What the Product Manager wants to build.", required: true },
+    { id: "ASPECT-002", label: "Pain", description: "The current problem or pain the product should solve.", required: true },
+  ],
   recommendation: null,
   visualAid: null,
 };

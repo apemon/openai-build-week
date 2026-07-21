@@ -23,6 +23,12 @@ Interview Window rules:
 - Domain keys are diagnostics, not proof of independence.
 - Return exactly one priorPermitDisposition for each prior permit (or restored entry), with no extras or duplicates. Reissues bind to exactly one compatible fresh permit; invalidations give a concise result-only reason.
 
+Answer Aspect rules:
+- Every non-null nextPrompt and every Question Permit prompt contains one to five Brain-authored answerAspects with unique ASPECT-* IDs, concise non-overlapping labels, and actionable descriptions. At least one aspect is required.
+- Each aspect is a bounded facet of that prompt's exact single decision. Never introduce another decision, assumption, recommendation, requirement, success metric, or policy through an aspect.
+- Permit-prompt aspects are scoped only to that permit's roadmap decision; they cannot borrow scope from the current prompt or another permit.
+- Preserve an aspect ID only while its meaning and prompt decision are unchanged. Never reuse an aspect ID for different meaning.
+
 For revalidate_restored, do not revise the Specification, roadmap, current prompt, or revision and return an empty changeSummary. Only provide a fresh window and exact dispositions. For every other operation, bind the complete output to baseRevision + 1.
 
 Maintain all V1/V2 rules: complete sections, stable provenance, test-ready Acceptance Criteria, categorical Readiness, no Prepared Demo markers, one current Interview Prompt at most, one decision question in both detailed/spoken forms, and no unsupported recommendation.
@@ -32,6 +38,7 @@ Before returning, silently run this exact consistency checklist:
 - completedItemIds exactly equals the resolved roadmap IDs; unresolvedDependencyIds exactly equals unresolved dependency IDs; currentDecisionItemId is null exactly when nextPrompt is null.
 - readiness blockerIds and openQuestionIds exactly equal the corresponding Specification item IDs, and readiness status agrees with those arrays.
 - Both detailedQuestion and spokenQuestion contain exactly one question mark and ask the same single decision. Use recommendation: null when confirmed evidence is insufficient.
+- Every nextPrompt and permit prompt has one to five unique, non-overlapping answerAspects, at least one required, and every aspect stays inside that prompt's exact decision scope.
 - If every Question Permit invariant and independence relationship cannot be proven, return an empty permits array. An empty Interview Window is valid and safer than a speculative permit.
 - The Interview Window and each retained permit exactly echo the output revision, output dependencyVersion, requestedApplicationCap, operation, window ID, and sequential ordinal.
 `;
@@ -100,6 +107,7 @@ Mandatory repair rules:
 - Recompute every exact-set field from the repaired candidate: roadmap completed/unresolved IDs and readiness blocker/open-question IDs.
 - If a prompt grounding, recommendation, visual-aid, permit, dependency, independence, or disposition invariant cannot be proven from the authoritative input, remove the optional construct. Use recommendation: null, visualAid: null, or an empty permits array as applicable; never remove the authoritative current prompt or prior-permit disposition requirement.
 - Ensure detailedQuestion and spokenQuestion each contain exactly one question mark and ask the same single decision without adding a spoken-only constraint.
+- Rebuild every invalid answerAspects list to contain one to five unique ASPECT-* IDs and unique meanings, with at least one required aspect. Remove or rewrite any aspect outside that prompt's exact decision; never repair it by broadening the question.
 - Revalidate all cross-references after corrections; omission of a listed correction is another invalid output.
 
 Bounded deterministic validation failures:
