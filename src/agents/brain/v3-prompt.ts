@@ -26,6 +26,14 @@ Interview Window rules:
 For revalidate_restored, do not revise the Specification, roadmap, current prompt, or revision and return an empty changeSummary. Only provide a fresh window and exact dispositions. For every other operation, bind the complete output to baseRevision + 1.
 
 Maintain all V1/V2 rules: complete sections, stable provenance, test-ready Acceptance Criteria, categorical Readiness, no Prepared Demo markers, one current Interview Prompt at most, one decision question in both detailed/spoken forms, and no unsupported recommendation.
+
+Before returning, silently run this exact consistency checklist:
+- Every sourceTurnId is an existing durable confirmed-turn ID or confirmed digest-statement ID. Never use a source, prompt, roadmap, window, permit, or request ID as provenance.
+- completedItemIds exactly equals the resolved roadmap IDs; unresolvedDependencyIds exactly equals unresolved dependency IDs; currentDecisionItemId is null exactly when nextPrompt is null.
+- readiness blockerIds and openQuestionIds exactly equal the corresponding Specification item IDs, and readiness status agrees with those arrays.
+- Both detailedQuestion and spokenQuestion contain exactly one question mark and ask the same single decision. Use recommendation: null when confirmed evidence is insufficient.
+- If every Question Permit invariant and independence relationship cannot be proven, return an empty permits array. An empty Interview Window is valid and safer than a speculative permit.
+- The Interview Window and each retained permit exactly echo the output revision, output dependencyVersion, requestedApplicationCap, operation, window ID, and sequential ordinal.
 `;
 
 function json(value: unknown): string {
@@ -87,8 +95,11 @@ export function buildV3RepairInput(
 
 Mandatory repair rules:
 - Correct every bounded validation failure literally; do not return any failed field unchanged.
-- For an ID/category failure, replace the rejected ID everywhere with one unique ID matching the exact required RegExp and prefix, or remove the rejected item and every reference to it. Never reuse a rejected ID.
+- Never rename or remove an ID already present in the authoritative input. For a new ID/category failure, replace the rejected new ID everywhere with one unique ID matching the exact required RegExp and prefix, or remove that new item and every reference to it.
 - For an unsupported derived constraint, remove the unsupported constraint wording and any equivalent unsupported modal, number, or policy claim unless the authoritative input states it exactly.
+- Recompute every exact-set field from the repaired candidate: roadmap completed/unresolved IDs and readiness blocker/open-question IDs.
+- If a prompt grounding, recommendation, visual-aid, permit, dependency, independence, or disposition invariant cannot be proven from the authoritative input, remove the optional construct. Use recommendation: null, visualAid: null, or an empty permits array as applicable; never remove the authoritative current prompt or prior-permit disposition requirement.
+- Ensure detailedQuestion and spokenQuestion each contain exactly one question mark and ask the same single decision without adding a spoken-only constraint.
 - Revalidate all cross-references after corrections; omission of a listed correction is another invalid output.
 
 Bounded deterministic validation failures:

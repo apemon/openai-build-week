@@ -25,7 +25,10 @@ const STATE_COPY: Record<BrainActivityState, { label: string; detail: string }> 
   working: { label: "Brain working", detail: "The last valid Specification remains available while this action runs." },
   taking_longer: { label: "Taking longer than usual", detail: "The Brain is still reporting verified activity." },
   connection_interrupted: { label: "Connection interrupted · Brain state unknown", detail: "No automatic restart was attempted." },
-  needs_attention: { label: "Needs attention", detail: "Brain execution cannot currently be verified." },
+  needs_attention: {
+    label: "Waiting for verified activity",
+    detail: "No new verified lifecycle event has arrived. The current request may still be running; no automatic retry was started.",
+  },
   timed_out: { label: "Timed out", detail: "No validated revision was applied." },
   revision_applied: { label: "Revision applied", detail: "The complete validated Specification revision is now current." },
   stopped: { label: "Stopped", detail: "No validated revision was applied after work stopped." },

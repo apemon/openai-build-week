@@ -2,7 +2,7 @@ import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, parse } from "node:path";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BrainHarnessEvent } from "@/domain/brain-harness";
 
@@ -122,6 +122,10 @@ async function collect(
 }
 
 beforeEach(() => resetCodexSdkHarnessStateForTests());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 describe("CodexSdkBrainHarness", () => {
   it.each([process.cwd(), homedir(), parse(process.cwd()).root])(
@@ -230,7 +234,9 @@ describe("CodexSdkBrainHarness", () => {
     try {
       const events = await collect(harness(client, storageRoot));
       expect(thread.prompts).toHaveLength(2);
+      expect(thread.prompts[0]).toContain("return an empty permits array");
       expect(thread.prompts[1]).toContain("Repair the rejected candidate.");
+      expect(thread.prompts[1]).toContain("Never rename or remove an ID already present");
       expect(events.filter((event) => event.type === "lifecycle").map(({ event }) => ({
         kind: event.kind,
         attempt: event.attempt,
@@ -246,6 +252,32 @@ describe("CodexSdkBrainHarness", () => {
         { kind: "validating_output", attempt: 2, sequence: 7 },
       ]);
       expect(events.find((event) => event.type === "result")?.response.provenance.repairAttempted).toBe(true);
+    } finally {
+      await rm(storageRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("logs only content-free validation categories when debug tracing is enabled", async () => {
+    const storageRoot = await mkdtemp(join(tmpdir(), "spec-grill-sdk-test-"));
+    const invalid = structuredClone(validV3BrainOutput());
+    invalid.specification.title = "SECRET_SPECIFICATION_TITLE";
+    invalid.interviewWindow.applicationCap = 1;
+    const client = new FakeClient(new FakeThread(null, "THREAD-SECRET-001", [
+      { output: invalid },
+      { output: validV3BrainOutput() },
+    ]));
+    const log = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.stubEnv("BRAIN_DEBUG_LOGS", "true");
+
+    try {
+      await collect(harness(client, storageRoot));
+      expect(log).toHaveBeenCalledTimes(1);
+      const serialized = JSON.stringify(log.mock.calls);
+      expect(serialized).toContain("validation_failed");
+      expect(serialized).toContain("interview_window");
+      expect(serialized).not.toContain("SECRET_SPECIFICATION_TITLE");
+      expect(serialized).not.toContain("THREAD-SECRET-001");
+      expect(serialized).not.toContain("applicationCap");
     } finally {
       await rm(storageRoot, { recursive: true, force: true });
     }

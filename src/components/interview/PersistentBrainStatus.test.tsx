@@ -20,7 +20,8 @@ describe("PersistentBrainStatus", () => {
   it("gives 10-second lifecycle silence precedence and stops healthy animation", () => {
     const result = derivePersistentBrainStatus(activity(), Date.parse("2026-07-21T00:00:31.000Z"));
     expect(result.state).toBe("needs_attention");
-    expect(result.label).toBe("Needs attention");
+    expect(result.label).toBe("Waiting for verified activity");
+    expect(result.detail).toContain("request may still be running");
     expect(result.activeAnimation).toBe(false);
   });
 

@@ -2,7 +2,6 @@ import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, parse, resolve } from "node:path";
 
-import { Codex } from "@openai/codex-sdk";
 import { zodTextFormat } from "openai/helpers/zod";
 
 import type { BrainHarness, BrainHarnessEvent } from "@/domain/brain-harness";
@@ -66,7 +65,12 @@ export interface CodexSdkBrainHarnessOptions {
 
 type CandidateValidation =
   | { valid: true; output: V3BrainModelOutput }
-  | { valid: false; rejectedOutput: V3BrainModelOutput | null; errors: string[] };
+  | {
+      valid: false;
+      rejectedOutput: V3BrainModelOutput | null;
+      errors: string[];
+      failureKind: "output_size" | "json_parse" | "schema" | "semantic";
+    };
 
 const activeThreadKeys = new Set<string>();
 const quarantinedThreadIds = new Set<string>();
@@ -138,13 +142,23 @@ async function validateStorageRoot(storageRoot: string): Promise<void> {
 
 function validateCandidate(raw: string, request: V3BrainRequest): CandidateValidation {
   if (new TextEncoder().encode(raw).byteLength > MAX_CODEX_OUTPUT_BYTES) {
-    return { valid: false, rejectedOutput: null, errors: ["Structured output exceeded its safe bound."] };
+    return {
+      valid: false,
+      rejectedOutput: null,
+      errors: ["Structured output exceeded its safe bound."],
+      failureKind: "output_size",
+    };
   }
   let candidate: unknown;
   try {
     candidate = JSON.parse(raw);
   } catch {
-    return { valid: false, rejectedOutput: null, errors: ["Structured output parsing failed."] };
+    return {
+      valid: false,
+      rejectedOutput: null,
+      errors: ["Structured output parsing failed."],
+      failureKind: "json_parse",
+    };
   }
   const parsed = v3BrainModelOutputSchema.safeParse(candidate);
   if (!parsed.success) {
@@ -154,6 +168,7 @@ function validateCandidate(raw: string, request: V3BrainRequest): CandidateValid
       errors: compactValidationErrors(
         parsed.error.issues.map((issue) => `${issue.path.join(".") || "output"}: ${issue.message}`),
       ),
+      failureKind: "schema",
     };
   }
   const semantic = validateV3BrainOutput(request, parsed.data);
@@ -162,9 +177,43 @@ function validateCandidate(raw: string, request: V3BrainRequest): CandidateValid
       valid: false,
       rejectedOutput: parsed.data,
       errors: compactValidationErrors(semantic.errors),
+      failureKind: "semantic",
     };
   }
   return { valid: true, output: parsed.data };
+}
+
+function validationCategories(errors: readonly string[]): string[] {
+  const categories = new Set<string>();
+  for (const error of errors) {
+    if (/source|provenance|grounded|confirmed evidence|unsupported constraint/i.test(error)) categories.add("provenance");
+    if (/roadmap|dependency|current decision/i.test(error)) categories.add("roadmap");
+    if (/interview window|permit|disposition/i.test(error)) categories.add("interview_window");
+    if (/nextprompt|spoken|detailed|question/i.test(error)) categories.add("prompt");
+    if (/readiness|blocker|open question/i.test(error)) categories.add("readiness");
+    if (/external evidence|evidence/i.test(error)) categories.add("external_evidence");
+    if (/\bid\b|duplicate|stable/i.test(error)) categories.add("identity");
+    if (/criterion|requirement/i.test(error)) categories.add("acceptance_criteria");
+  }
+  return [...categories].sort();
+}
+
+function logValidationFailure(
+  input: V3BrainRequest,
+  attempt: 1 | 2,
+  validation: Extract<CandidateValidation, { valid: false }>,
+): void {
+  if (process.env.BRAIN_DEBUG_LOGS !== "true") return;
+  console.info("[spec-grill:codex]", JSON.stringify({
+    event: "validation_failed",
+    requestId: input.requestId,
+    operation: input.operation,
+    baseRevision: input.baseRevision,
+    attempt,
+    failureKind: validation.failureKind,
+    errorCount: validation.errors.length,
+    categories: validation.failureKind === "semantic" ? validationCategories(validation.errors) : [],
+  }));
 }
 
 function eventType(value: unknown): string | null {
@@ -283,7 +332,7 @@ export class CodexSdkBrainHarness implements BrainHarness {
       const clientOptions = safeEnvironment(storageRoot, this.options.apiKey);
       const client = this.options.clientFactory
         ? this.options.clientFactory(clientOptions)
-        : new Codex(clientOptions) as unknown as CodexSdkClientLike;
+        : new (await import("@openai/codex-sdk")).Codex(clientOptions) as unknown as CodexSdkClientLike;
       const threadOptions: CodexThreadOptions = {
         model,
         sandboxMode: "read-only",
@@ -371,6 +420,7 @@ export class CodexSdkBrainHarness implements BrainHarness {
           output = validation.output;
           break;
         }
+        logValidationFailure(input, attempt, validation);
         if (attempt === 2) {
           quarantine(knownThreadId ?? thread.id);
           throw new BrainRunError(
