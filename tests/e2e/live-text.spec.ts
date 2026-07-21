@@ -21,6 +21,7 @@ test("submits one mocked typed Live turn only after explicit confirmation", asyn
 
   await page.getByRole("button", { name: "Send to Brain" }).click();
   await expect.poll(() => calls).toBe(2);
+  await expect.poll(() => requests.length).toBe(2);
   expect(requests[1].codexThreadId).toBe(threadId);
   await expect(page.getByRole("heading", { name: "Team billing for a SaaS workspace" })).toBeVisible();
   await expect(page.getByText("Revision 2")).toBeVisible();
