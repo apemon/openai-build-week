@@ -37,7 +37,7 @@ A Product Manager answer captured after the Interview Session begins and automat
 _Avoid_: Recording, voice message, audio clip
 
 **Answer Draft**:
-The editable finalized transcription or typed response held by the Communicator for Product Manager review while microphone capture is paused. It is not yet a product decision and is never sent to the Brain automatically.
+The editable Answer Summary, or a truthful text-only fallback when coverage assessment is unavailable, held by the Communicator for Product Manager review while microphone capture is paused. It is not yet a product decision and is never sent to the Brain automatically.
 _Avoid_: Decision, requirement, final answer
 
 **Confirmed Answer**:
@@ -57,8 +57,24 @@ The audio, conversation, context, Decision Tray, and Specification information u
 _Avoid_: Account data, saved project, recording archive
 
 **Interview Prompt**:
-The Communicator's single current question. It has a concise spoken form and a detailed visible form that may include context, a grounded AI recommendation, or a Visual Aid, but both forms ask for the same decision; absent sufficient confirmed evidence, it presents no recommendation.
+The Communicator's single current question. It has a concise spoken form, a detailed visible form, and one to five Brain-authored Answer Aspects that bound what a useful answer should cover. It may include context, a grounded AI recommendation, or a Visual Aid, but every form asks for the same decision; absent sufficient confirmed evidence, it presents no recommendation.
 _Avoid_: Question list, questionnaire, agenda
+
+**Answer Aspect**:
+One Brain-authored coverage target for the active Interview Prompt. Answer Aspects make the dimensions of a useful answer explicit without splitting the prompt into a questionnaire, and the Communicator cannot add, replace, or broaden them.
+_Avoid_: Follow-up question, checklist item, Communicator requirement
+
+**Answer Intake**:
+The temporary, non-authoritative collection of up to three Product Manager voice or text contributions for one active Interview Prompt. It exists only long enough to assess the Brain-authored Answer Aspects and create an Answer Summary; it is not checkpointed or sent to the Brain.
+_Avoid_: Transcript history, confirmed answer, conversation memory
+
+**Coverage Assessment**:
+The Communicator's non-authoritative classification of each Brain-authored Answer Aspect as covered, missing, or uncertain using only the active Answer Intake. It may justify one bounded clarification at a time but cannot decide that the product intent is correct or mutate the Specification.
+_Avoid_: Readiness, validation, Brain analysis
+
+**Answer Summary**:
+The concise, editable proposal produced from one Answer Intake after its Answer Aspects have been assessed or the bounded clarification limit has been reached. It becomes a Confirmed Answer only after explicit Product Manager approval; unresolved aspects remain visible and are never guessed away.
+_Avoid_: Transcript, automatic answer, Decision Summary
 
 **Project Context Digest**:
 The editable, source-linked distillation of pasted or uploaded project context that becomes Confirmed Input only after Product Manager approval. It preserves explicit source statements without automatically confirming interpretations or the entire source document as requirements.
