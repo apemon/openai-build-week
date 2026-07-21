@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { initialInterviewPrompt } from "@/domain/initial-state";
 import type { ExchangeIdentity, QuestionPermit } from "@/domain/v3-schemas";
 
-import { OpenAIWebRTCTransport } from "./OpenAIWebRTCTransport";
+import { OpenAIWebRTCTransport, parseAnswerIntakeAssessment } from "./OpenAIWebRTCTransport";
 import { createLockedRealtimeSession } from "./realtime-session";
 
 class FakeDataChannel extends EventTarget {
@@ -22,6 +22,26 @@ class FakeDataChannel extends EventTarget {
     this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(event) }));
   }
 }
+
+describe("Answer Intake assessment output normalization", () => {
+  const assessment = {
+    summary: "Build a focused interview that resolves vague product intent.",
+    coverage: [
+      { aspectId: "ASPECT-001", status: "covered" },
+      { aspectId: "ASPECT-002", status: "uncertain" },
+    ],
+    uncertainties: ["The current pain needs more detail."],
+    clarificationQuestion: "What current pain should this solve?",
+    clarificationAspectIds: ["ASPECT-002"],
+  };
+
+  it("discards one prose wrapper but rejects multiple embedded objects", () => {
+    const encoded = JSON.stringify(assessment);
+    expect(parseAnswerIntakeAssessment(`Assessment result:\n${encoded}\nUse the object only.`, initialInterviewPrompt)).toEqual(assessment);
+    expect(parseAnswerIntakeAssessment(`\`\`\`json\n${encoded}\n\`\`\``, initialInterviewPrompt)).toEqual(assessment);
+    expect(parseAnswerIntakeAssessment(`${encoded}\n${encoded}`, initialInterviewPrompt)).toBeNull();
+  });
+});
 
 function permit(id = "PERMIT-001", ordinal: 1 | 2 | 3 = 1): QuestionPermit {
   return {
@@ -277,6 +297,7 @@ describe("OpenAIWebRTCTransport V3 identity safety", () => {
         promptId: initialInterviewPrompt.id,
         permitId: "",
         cancelEpoch: "1",
+        assessmentAttempt: "1",
       },
       output_modalities: ["text"],
       tools: [],
@@ -303,6 +324,29 @@ describe("OpenAIWebRTCTransport V3 identity safety", () => {
         clarificationQuestion: null,
         clarificationAspectIds: [],
       }),
+    });
+    expect(baseListener).not.toHaveBeenCalledWith(expect.objectContaining({
+      code: "INVALID_ANSWER_INTAKE_ASSESSMENT",
+    }));
+    const repairRequest = lastResponseCreate(dataChannel);
+    expect(repairRequest.response.metadata).toMatchObject({
+      purpose: "answer_intake_assessment",
+      assessmentSequence: "1",
+      assessmentAttempt: "2",
+    });
+    dataChannel.emitProviderEvent({
+      event_id: "assessment-repair-created",
+      type: "response.created",
+      response: { id: "response-assessment-repair", metadata: repairRequest.response.metadata },
+    });
+    dataChannel.emitProviderEvent({
+      event_id: "assessment-repair-invalid",
+      type: "response.output_text.done",
+      response_id: "response-assessment-repair",
+      item_id: "assessment-repair-item",
+      output_index: 0,
+      content_index: 0,
+      text: "not valid JSON",
     });
     expect(baseListener).toHaveBeenCalledWith({
       type: "error",
@@ -357,7 +401,7 @@ describe("OpenAIWebRTCTransport V3 identity safety", () => {
       item_id: "assessment-retry-item",
       output_index: 0,
       content_index: 0,
-      text: JSON.stringify(validAssessment),
+      text: `Assessment result:\n${JSON.stringify(validAssessment)}\nUse the validated object only.`,
     };
     dataChannel.emitProviderEvent(validAssessmentEvent);
     dataChannel.emitProviderEvent(validAssessmentEvent);

@@ -9,6 +9,7 @@
 - Added sequential promotion of the next unused permit after a confirmed or permitted-deferred asynchronous job while preserving one active question and the same single authoritative Brain request. The response barrier consults current runtime jobs, including a job promoted after request start.
 - Extended Prepared Demo with a deterministic Answer Intake frame containing multiple aspects, one missing aspect, one prepared clarification, and an editable summary without Realtime, microphone, Brain, Codex, OpenAI, search, context-route, or user-file access.
 - Added independent exact-coverage, transcript gating, early-review/late-assessment, raw-intake privacy, sequential promotion/current-job barrier, fake-media, keyboard, axe, 390 px, Prepared isolation, and V1–V3 regression verification.
+- Hardened live coverage assessment against Realtime format drift: discard prose wrappers as untrusted, accept only one strictly validated embedded object, and make one bounded identity-bound repair attempt before the existing unassessed fallback.
 
 ## Local persistent Codex Brain hackathon extension
 

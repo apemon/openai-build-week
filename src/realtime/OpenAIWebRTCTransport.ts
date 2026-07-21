@@ -76,6 +76,7 @@ type V3ResponseBinding = {
   identity: ExchangeIdentity;
   clarificationSequence: 1 | 2 | null;
   assessmentSequence: 1 | 2 | 3 | null;
+  assessmentAttempt: 1 | 2 | null;
 };
 
 interface ActivePermittedExchange {
@@ -99,6 +100,7 @@ interface ActiveAnswerIntake {
   contributions: string[];
   latestAssessment: AnswerIntakeAssessment | null;
   assessmentPending: boolean;
+  assessmentAttempt: 0 | 1 | 2;
   clarificationCount: number;
   promptPlaybackCancelled: boolean;
   cancelledClarificationSequences: Set<number>;
@@ -302,6 +304,7 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
       contributions: [],
       latestAssessment: null,
       assessmentPending: false,
+      assessmentAttempt: 0,
       clarificationCount: 0,
       promptPlaybackCancelled: false,
       cancelledClarificationSequences: new Set(),
@@ -336,9 +339,10 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
     }
     active.contributions.push(contribution);
     active.assessmentPending = true;
+    active.assessmentAttempt = 1;
     this.setMicrophoneEnabled(false);
     try {
-      this.sendEvent(createAnswerIntakeAssessmentEvent(active.prompt, active.contributions, active.identity));
+      this.sendEvent(createAnswerIntakeAssessmentEvent(active.prompt, active.contributions, active.identity, 1));
     } catch (error) {
       active.contributions.pop();
       active.assessmentPending = false;
@@ -910,6 +914,21 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
             if (!active || !sameIdentity(active.identity, v3Binding.identity)) return;
             const assessment = parseAnswerIntakeAssessment(event.text, active.prompt);
             if (!assessment) {
+              if (active.assessmentAttempt === 1 && v3Binding.assessmentAttempt === 1) {
+                active.assessmentAttempt = 2;
+                this.v3Responses.delete(event.response_id);
+                try {
+                  this.sendEvent(createAnswerIntakeAssessmentEvent(
+                    active.prompt,
+                    active.contributions,
+                    active.identity,
+                    2,
+                  ));
+                  return;
+                } catch {
+                  // Fall through to the truthful unassessed fallback.
+                }
+              }
               active.assessmentPending = false;
               this.emit({ type: "error", code: "INVALID_ANSWER_INTAKE_ASSESSMENT", retryable: true });
               return;
@@ -1064,6 +1083,7 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
       && sameIdentity(this.activeAnswerIntake.identity, binding.identity)
     ) {
       this.activeAnswerIntake.assessmentPending = false;
+      this.activeAnswerIntake.assessmentAttempt = 0;
     }
     if (binding.purpose === "speak_brain_prompt") {
       this.emitV3({
@@ -1197,7 +1217,8 @@ export class OpenAIWebRTCTransport implements ClarificationCommunicatorTransport
     if (binding.purpose === "answer_intake_assessment") {
       return Boolean(
         this.activeAnswerIntake
-        && binding.assessmentSequence === this.activeAnswerIntake.contributions.length,
+        && binding.assessmentSequence === this.activeAnswerIntake.contributions.length
+        && binding.assessmentAttempt === this.activeAnswerIntake.assessmentAttempt
       );
     }
     if (binding.purpose === "answer_clarification") {
@@ -1435,11 +1456,20 @@ function getV3ResponseBinding(
     && assessmentSequence !== 2
     && assessmentSequence !== 3
   ) return null;
+  const assessmentAttempt = purpose === "answer_intake_assessment"
+    ? Number(metadata?.assessmentAttempt ?? "1")
+    : null;
+  if (
+    purpose === "answer_intake_assessment"
+    && assessmentAttempt !== 1
+    && assessmentAttempt !== 2
+  ) return null;
   return {
     purpose,
     identity: identity.data,
     clarificationSequence: clarificationSequence as 1 | 2 | null,
     assessmentSequence: assessmentSequence as 1 | 2 | 3 | null,
+    assessmentAttempt: assessmentAttempt as 1 | 2 | null,
   };
 }
 
@@ -1468,13 +1498,13 @@ function parseAuthoritativeIdentity(identity: ExchangeIdentity, expectedPromptId
   return parsed;
 }
 
-function parseAnswerIntakeAssessment(
+export function parseAnswerIntakeAssessment(
   value: string,
   prompt: InterviewPrompt,
 ): AnswerIntakeAssessment | null {
   let candidate: unknown;
   try {
-    candidate = JSON.parse(value);
+    candidate = JSON.parse(unwrapJsonObject(value));
   } catch {
     return null;
   }
@@ -1482,6 +1512,63 @@ function parseAnswerIntakeAssessment(
   if (!strict.success) return null;
   const validated = validateAnswerIntakeAssessment(prompt, strict.data);
   return validated.valid ? validated.assessment : null;
+}
+
+function unwrapJsonObject(value: string): string {
+  const trimmed = value.trim();
+  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
+  if (fenced?.[1]) return fenced[1].trim();
+  try {
+    JSON.parse(trimmed);
+    return trimmed;
+  } catch {
+    // Realtime text can wrap an otherwise exact object in prose. The wrapper is
+    // discarded as untrusted; only one embedded object may proceed to strict
+    // schema and exact Answer Aspect membership validation.
+  }
+  const objects = findEmbeddedJsonObjects(trimmed);
+  return objects.length === 1 ? objects[0] : trimmed;
+}
+
+function findEmbeddedJsonObjects(value: string): string[] {
+  const objects: string[] = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (start < 0) {
+      if (character === "{") {
+        start = index;
+        depth = 1;
+      }
+      continue;
+    }
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') inString = true;
+    else if (character === "{") depth += 1;
+    else if (character === "}") {
+      depth -= 1;
+      if (depth !== 0) continue;
+      const candidate = value.slice(start, index + 1);
+      try {
+        const parsed: unknown = JSON.parse(candidate);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) objects.push(candidate);
+      } catch {
+        // Continue scanning for one later complete object.
+      }
+      start = -1;
+      inString = false;
+      escaped = false;
+    }
+  }
+  return objects;
 }
 
 function sameStringMembers(left: string[], right: string[]): boolean {
