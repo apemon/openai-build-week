@@ -15,6 +15,7 @@ import { FinalReview } from "@/components/final-review/FinalReview";
 import { PendingWorkReview } from "@/components/final-review/PendingWorkReview";
 import { InterviewRoom } from "@/components/interview/InterviewRoom";
 import { DecisionTray, InterviewWindowQuestion, PersistentBrainStatus, TextComposer } from "@/components/interview";
+import { SessionLinkCard } from "@/components/session-link";
 import { StartScreen } from "@/components/start/StartScreen";
 import { prepareContextLocally } from "@/context";
 import { PreparedDemoRunner, playPreparedAudio, type DemoStep } from "@/demo/demo-runner";
@@ -39,7 +40,7 @@ import type {
 import { revalidateLookahead } from "@/domain/v2-invariants";
 import { orderDecisionBatchEntries } from "@/domain/v3-invariants";
 import { createDecisionBatchEntries, createInitialV3RuntimeState, createRestoredAsyncEntries, v3RuntimeReducer } from "@/domain/v3-runtime";
-import { interviewJobSchema, type DecisionBatch, type ExchangeIdentity, type InterviewJob, type RestoredAsyncEntry, type V3BrainOperation } from "@/domain/v3-schemas";
+import { codexThreadIdSchema, interviewJobSchema, type DecisionBatch, type ExchangeIdentity, type InterviewJob, type RestoredAsyncEntry, type V3BrainOperation } from "@/domain/v3-schemas";
 import { clearCheckpoint, restoreV3Checkpoint, saveV3Checkpoint } from "@/lib/session-checkpoint";
 import { OpenAIWebRTCTransport } from "@/realtime/OpenAIWebRTCTransport";
 import { useCommunicator } from "@/realtime/useCommunicator";
@@ -92,6 +93,9 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
   const [preparedV3NowMs, setPreparedV3NowMs] = useState<number | undefined>();
   const [preparedV3FrameLabel, setPreparedV3FrameLabel] = useState<string | null>(null);
   const [preparedV3Complete, setPreparedV3Complete] = useState(false);
+  const [codexThreadId, setCodexThreadId] = useState<string | null>(null);
+  const [sessionLinkUrl, setSessionLinkUrl] = useState<string | null>(null);
+  const [linkedSessionNotice, setLinkedSessionNotice] = useState<string | null>(null);
   const pendingOperation = useRef<ConfirmableOperation>("answer");
   const lastBrainOperation = useRef<RetryableOperation>("answer");
   const demoRunner = useRef<PreparedDemoRunner | null>(null);
@@ -179,6 +183,26 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
   });
   const disconnectCommunicator = communicator.disconnect;
 
+  const bindCodexThread = useCallback((threadId: string) => {
+    const parsed = codexThreadIdSchema.parse(threadId);
+    const url = new URL(window.location.href);
+    url.searchParams.set("thread", parsed);
+    url.hash = "";
+    window.history.replaceState(null, "", url);
+    setCodexThreadId(parsed);
+    setSessionLinkUrl(url.toString());
+    setLinkedSessionNotice(null);
+  }, []);
+
+  const clearCodexThreadLink = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("thread");
+    url.hash = "";
+    window.history.replaceState(null, "", url);
+    setCodexThreadId(null);
+    setSessionLinkUrl(null);
+  }, []);
+
   const playDemoPrompt = useCallback((src: string) => {
     preparedAudio.current?.pause();
     return playPreparedAudio(src, (value) => {
@@ -189,18 +213,39 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
   }, []);
 
   useEffect(() => {
+    const linkedThread = new URL(window.location.href).searchParams.get("thread");
+    const parsedLinkedThread = linkedThread ? codexThreadIdSchema.safeParse(linkedThread) : null;
     const restored = restoreV3Checkpoint(window.sessionStorage);
-    if (restored) {
-      dispatch({ type: "RESTORE_CHECKPOINT", state: restored.state });
-      dispatchV3({ type: "V3_CHECKPOINT_RESTORED", entries: restored.confirmedQueuedEntries, adaptiveWindow: restored.adaptiveWindow });
+    if (linkedThread && !parsedLinkedThread?.success) {
+      queueMicrotask(() => setLinkedSessionNotice("This Session Link is invalid. Start a new Live session or run Prepared Demo separately."));
+      return;
     }
-  }, []);
+    if (!restored) {
+      if (linkedThread) queueMicrotask(() => setLinkedSessionNotice("Session unavailable in this tab. The matching browser checkpoint is missing or expired."));
+      return;
+    }
+    if (parsedLinkedThread?.success && restored.codexThreadId !== parsedLinkedThread.data) {
+      queueMicrotask(() => setLinkedSessionNotice("Session unavailable in this tab. The link does not match this tab's saved checkpoint."));
+      return;
+    }
+    dispatch({ type: "RESTORE_CHECKPOINT", state: restored.state });
+    dispatchV3({ type: "V3_CHECKPOINT_RESTORED", entries: restored.confirmedQueuedEntries, adaptiveWindow: restored.adaptiveWindow });
+    if (restored.codexThreadId) queueMicrotask(() => bindCodexThread(restored.codexThreadId!));
+    if (parsedLinkedThread?.success) queueMicrotask(() => setLinkedSessionNotice("Live session resumed from this tab's saved checkpoint."));
+  }, [bindCodexThread]);
 
   useEffect(() => {
     if (state.confirmedContextDigest || state.revision > 0 || state.phase === "finalized") {
-      saveV3Checkpoint(window.sessionStorage, state, createRestoredAsyncEntries(v3Runtime.jobs), v3Runtime.adaptiveWindow);
+      saveV3Checkpoint(
+        window.sessionStorage,
+        state,
+        createRestoredAsyncEntries(v3Runtime.jobs),
+        v3Runtime.adaptiveWindow,
+        new Date(),
+        codexThreadId,
+      );
     }
-  }, [state, v3Runtime.adaptiveWindow, v3Runtime.jobs]);
+  }, [codexThreadId, state, v3Runtime.adaptiveWindow, v3Runtime.jobs]);
 
   useEffect(() => {
     if (state.phase === "start") return;
@@ -222,6 +267,9 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
   }, [disconnectCommunicator]);
 
   const enterContextIntake = useCallback((mode: "live" | "demo", wantsVoice: boolean) => {
+    clearCheckpoint(window.sessionStorage);
+    clearCodexThreadLink();
+    setLinkedSessionNotice(null);
     const next = createInitialState(mode);
     next.phase = "preparing_context";
     voiceRequested.current = wantsVoice;
@@ -240,7 +288,7 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
     setPreparedV3FrameLabel(v3DemoRunner.current?.current.label ?? null);
     dispatchV3({ type: "V3_RUNTIME_RESET" });
     dispatch({ type: "RESTORE_CHECKPOINT", state: next });
-  }, []);
+  }, [clearCodexThreadLink]);
 
   const prepareContext = useCallback(async (input: ContextIntakeSubmission) => {
     const snapshot = stateRef.current;
@@ -365,6 +413,7 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
         priorInterviewWindow: runtime.interviewWindow,
         restoredEntriesForRevalidation,
         decisionBatch,
+        codexThreadId,
         turn,
       });
       dispatchV3({ type: "V3_BRAIN_ACTION_ACCEPTED", requestId, actionId, operation, cancelEpoch, acceptedAt: new Date().toISOString() });
@@ -409,6 +458,7 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
       }
       communicator.pauseForTextInput();
       const response = await postV3BrainRequest(request, (event) => dispatchV3({ type: "V3_BRAIN_LIFECYCLE_RECEIVED", event }), abortController.signal);
+      if (response.codexThreadId) bindCodexThread(response.codexThreadId);
       if (runtime.activeJobId) {
         v3Communicator.handleRevisionBarrier(cancelEpoch);
         dispatchV3({ type: "V3_QUESTIONS_PAUSED", nextCancelEpoch: cancelEpoch });
@@ -463,7 +513,7 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
       if (activeRequestId.current === requestId) activeRequestId.current = null;
       if (activeRequestAbort.current === abortController) activeRequestAbort.current = null;
     }
-  }, [communicator, v3Communicator, voiceMuted]);
+  }, [bindCodexThread, codexThreadId, communicator, v3Communicator, voiceMuted]);
 
   useEffect(() => {
     if (state.phase !== "connecting" || !state.confirmedContextDigest || state.revision !== 0 || state.pendingRequest) return;
@@ -687,8 +737,10 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
     realtimeConnected.current = false;
     preparedAudio.current?.pause();
     clearCheckpoint(window.sessionStorage);
+    clearCodexThreadLink();
+    setLinkedSessionNotice(null);
     dispatch({ type: "RESTORE_CHECKPOINT", state: createInitialState("live") });
-  }, [communicator]);
+  }, [clearCodexThreadLink, communicator]);
 
   const resumeGrilling = useCallback(() => {
     const snapshot = stateRef.current;
@@ -914,8 +966,12 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
       </InterviewWindowQuestion>
     );
 
+  const sessionLink = state.mode === "live" && codexThreadId && sessionLinkUrl
+    ? <SessionLinkCard sessionUrl={sessionLinkUrl} threadId={codexThreadId} expiresAt={state.expiresAt} />
+    : null;
+
   if (state.phase === "start") {
-    return <StartScreen liveEnabled={liveEnabled} liveUnavailableReason="Live AI is disabled or the server key is not configured." onEnableMicrophone={() => enterContextIntake("live", true)} onStartLiveText={() => enterContextIntake("live", false)} onStartPreparedDemo={() => enterContextIntake("demo", false)} />;
+    return <StartScreen liveEnabled={liveEnabled} brainLabel="Hackathon Codex" liveUnavailableReason="Live AI is disabled or the server key is not configured." linkedSessionNotice={linkedSessionNotice} onEnableMicrophone={() => enterContextIntake("live", true)} onStartLiveText={() => enterContextIntake("live", false)} onStartPreparedDemo={() => enterContextIntake("demo", false)} />;
   }
 
   if (state.phase === "preparing_context") {
@@ -936,9 +992,9 @@ export function SpecGrillApp({ liveEnabled }: { liveEnabled: boolean }) {
   }
 
   if (state.phase === "final_review" || state.phase === "finalized") {
-    return <FinalReview specification={state.specification} revision={state.revision} mode={state.mode} finalized={state.phase === "finalized"} brainModel={state.provenance.source === "live_ai" ? state.provenance.brainModel : null} realtimeModel={state.provenance.source === "live_ai" ? state.provenance.realtimeModel : null} staleDecisionSummaries={state.staleDecisionSummaries} persistentBrainStatus={persistentBrainStatus} decisionTray={decisionTray} onNextActionsChange={updateNextActions} onFinalize={() => dispatch({ type: "FINALIZE" })} onResume={resumeGrilling} onExit={exitSession} />;
+    return <FinalReview specification={state.specification} revision={state.revision} mode={state.mode} finalized={state.phase === "finalized"} brainModel={state.provenance.source === "live_ai" ? state.provenance.brainModel : null} realtimeModel={state.provenance.source === "live_ai" ? state.provenance.realtimeModel : null} staleDecisionSummaries={state.staleDecisionSummaries} persistentBrainStatus={persistentBrainStatus} decisionTray={decisionTray} sessionLink={sessionLink} onNextActionsChange={updateNextActions} onFinalize={() => dispatch({ type: "FINALIZE" })} onResume={resumeGrilling} onExit={exitSession} />;
   }
 
   const currentTopic = state.questionRoadmap.items.find((item) => item.id === state.questionRoadmap.currentDecisionItemId)?.topic ?? null;
-  return <InterviewRoom state={state} remainingLabel={remainingLabel} microphoneState={communicator.microphoneState} voiceMuted={voiceMuted} changedItemIds={changedItemIds} preparedAudioUnavailable={preparedAudioUnavailable} activeLookahead={state.activeLookahead} processingTopic={currentTopic} staleReason={state.staleLookaheadReason} staleDecisionSummaries={state.staleDecisionSummaries} persistentBrainStatus={persistentBrainStatus} permittedInterview={permittedInterview} decisionTray={decisionTray} onToggleVoice={() => { const nextMuted = !voiceMuted; setVoiceMuted(nextMuted); if (nextMuted) { transport.stopPlayback(); preparedAudio.current?.pause(); } }} canResumeMicrophone={communicator.connectionState === "connected"} onResumeMicrophone={() => { communicator.resumeMicrophone(); dispatch({ type: "LISTENING_STARTED" }); }} onAnswerNow={state.mode === "live" && communicator.connectionState === "connected" ? () => { communicator.answerNow(); dispatch({ type: "LISTENING_STARTED" }); } : undefined} onComposerFocus={communicator.pauseForTextInput} onCreateDraft={(draft: AnswerDraft) => { pendingOperation.current = "answer"; communicator.pauseForTextInput(); dispatch({ type: "ANSWER_DRAFT_READY", draft }); }} onEditDraft={(text) => dispatch({ type: "ANSWER_DRAFT_EDITED", text })} onConfirmDraft={confirmDraft} onRecordAgain={() => { if (communicator.connectionState === "connected") { communicator.recordAgain(); dispatch({ type: "LISTENING_STARTED" }); } else dispatch({ type: "ANSWER_DRAFT_DISCARDED" }); }} onDefer={state.mode === "live" ? deferPrompt : undefined} onReviewSpecification={reviewSpecification} onCorrectItem={correctItem} onUsePreparedAnswer={state.mode === "demo" ? advancePreparedDemo : undefined} onClarification={clarifyLookahead} onRequestDecisionSummary={requestDecisionSummary} onDecisionSummaryChange={(text) => dispatch({ type: "DECISION_SUMMARY_EDITED", text })} onConfirmDecisionSummary={confirmDecisionSummary} onReuseStaleSummary={(text) => { if (!state.currentPrompt) return; pendingOperation.current = "answer"; dispatch({ type: "ANSWER_DRAFT_READY", draft: { text, source: "typed", promptId: state.currentPrompt.id, transcriptionItemId: null } }); }} onRetryError={state.mode === "live" && state.error?.retryable ? retryFromError : undefined} onRestartPreparedDemo={state.mode === "live" && state.error ? () => enterContextIntake("demo", false) : undefined} />;
+  return <InterviewRoom state={state} remainingLabel={remainingLabel} microphoneState={communicator.microphoneState} voiceMuted={voiceMuted} changedItemIds={changedItemIds} preparedAudioUnavailable={preparedAudioUnavailable} activeLookahead={state.activeLookahead} processingTopic={currentTopic} staleReason={state.staleLookaheadReason} staleDecisionSummaries={state.staleDecisionSummaries} persistentBrainStatus={persistentBrainStatus} permittedInterview={permittedInterview} decisionTray={decisionTray} sessionLink={sessionLink} onToggleVoice={() => { const nextMuted = !voiceMuted; setVoiceMuted(nextMuted); if (nextMuted) { transport.stopPlayback(); preparedAudio.current?.pause(); } }} canResumeMicrophone={communicator.connectionState === "connected"} onResumeMicrophone={() => { communicator.resumeMicrophone(); dispatch({ type: "LISTENING_STARTED" }); }} onAnswerNow={state.mode === "live" && communicator.connectionState === "connected" ? () => { communicator.answerNow(); dispatch({ type: "LISTENING_STARTED" }); } : undefined} onComposerFocus={communicator.pauseForTextInput} onCreateDraft={(draft: AnswerDraft) => { pendingOperation.current = "answer"; communicator.pauseForTextInput(); dispatch({ type: "ANSWER_DRAFT_READY", draft }); }} onEditDraft={(text) => dispatch({ type: "ANSWER_DRAFT_EDITED", text })} onConfirmDraft={confirmDraft} onRecordAgain={() => { if (communicator.connectionState === "connected") { communicator.recordAgain(); dispatch({ type: "LISTENING_STARTED" }); } else dispatch({ type: "ANSWER_DRAFT_DISCARDED" }); }} onDefer={state.mode === "live" ? deferPrompt : undefined} onReviewSpecification={reviewSpecification} onCorrectItem={correctItem} onUsePreparedAnswer={state.mode === "demo" ? advancePreparedDemo : undefined} onClarification={clarifyLookahead} onRequestDecisionSummary={requestDecisionSummary} onDecisionSummaryChange={(text) => dispatch({ type: "DECISION_SUMMARY_EDITED", text })} onConfirmDecisionSummary={confirmDecisionSummary} onReuseStaleSummary={(text) => { if (!state.currentPrompt) return; pendingOperation.current = "answer"; dispatch({ type: "ANSWER_DRAFT_READY", draft: { text, source: "typed", promptId: state.currentPrompt.id, transcriptionItemId: null } }); }} onRetryError={state.mode === "live" && state.error?.retryable ? retryFromError : undefined} onRestartPreparedDemo={state.mode === "live" && state.error ? () => enterContextIntake("demo", false) : undefined} />;
 }

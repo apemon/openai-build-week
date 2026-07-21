@@ -87,6 +87,7 @@ export interface V3BrainRequestOptions {
   restoredEntriesForRevalidation?: RestoredAsyncEntry[];
   decisionBatch?: DecisionBatch | null;
   externalEvidenceBundle?: FrozenExternalEvidence[];
+  codexThreadId?: string | null;
   turn?: ConversationTurn;
 }
 
@@ -119,6 +120,7 @@ export function createV3BrainRequest(
     restoredEntriesForRevalidation: options.restoredEntriesForRevalidation ?? [],
     decisionBatch: options.decisionBatch ?? null,
     externalEvidenceBundle: options.externalEvidenceBundle ?? [],
+    codexThreadId: options.codexThreadId ?? null,
   });
 }
 

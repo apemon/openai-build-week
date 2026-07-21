@@ -47,6 +47,7 @@ export interface InterviewRoomProps {
   persistentBrainStatus?: ReactNode;
   permittedInterview?: ReactNode;
   decisionTray?: ReactNode;
+  sessionLink?: ReactNode;
 }
 
 export function InterviewRoom(props: InterviewRoomProps) {
@@ -65,6 +66,7 @@ export function InterviewRoom(props: InterviewRoomProps) {
   return (
     <main className="mx-auto min-h-screen max-w-[1500px] px-3 py-3 sm:px-5">
       {props.persistentBrainStatus ? <div className="sticky top-2 z-10 mb-4 space-y-2">{header}{props.persistentBrainStatus}</div> : <div className="sticky top-2 z-10 mb-4">{header}</div>}
+      {props.sessionLink && <div className="mb-4">{props.sessionLink}</div>}
       <div aria-live="polite" className="sr-only">{state.phase === "reviewing_answer" ? "Answer Draft ready for review." : state.phase === "analyzing" ? "The Brain is analyzing the confirmed answer." : state.error?.message ?? ""}</div>
       <div role="tablist" aria-label="Session details" className="mb-4 grid grid-cols-2 rounded-xl border border-stone-700 p-1 lg:hidden"><button type="button" role="tab" aria-selected={mobileTab === "specification"} onClick={() => setMobileTab("specification")} className={`min-h-11 rounded-lg px-3 ${mobileTab === "specification" ? "bg-stone-700 font-semibold" : "text-stone-300"}`}>Specification</button><button type="button" role="tab" aria-selected={mobileTab === "history"} onClick={() => setMobileTab("history")} className={`min-h-11 rounded-lg px-3 ${mobileTab === "history" ? "bg-stone-700 font-semibold" : "text-stone-300"}`}>History</button></div>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">

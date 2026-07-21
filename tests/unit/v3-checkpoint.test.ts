@@ -68,6 +68,20 @@ describe("V3 checkpoint privacy and migration", () => {
     expect(storage.removeItem).not.toHaveBeenCalled();
   });
 
+  it("binds a validated Codex thread ID to the sanitized checkpoint", () => {
+    const checkpoint = createV3Checkpoint(
+      session(),
+      [],
+      { eligibleOutcomes: [], applicationCap: 1, singletonRecoveryStreak: 0 },
+      now,
+      "0199a213-81c0-7800-8aa1-bbab2a035a53",
+    );
+
+    expect(checkpoint.codexThreadId).toBe("0199a213-81c0-7800-8aa1-bbab2a035a53");
+    const storage = { getItem: vi.fn(() => JSON.stringify(checkpoint)), removeItem: vi.fn() };
+    expect(restoreV3Checkpoint(storage, now)?.codexThreadId).toBe(checkpoint.codexThreadId);
+  });
+
   it("rejects malformed V3 shapes rather than partially restoring wording", () => {
     const storage = { getItem: vi.fn(() => JSON.stringify({ schemaVersion: 3, confirmedQueuedEntries: [{ text: "unsafe partial" }] })), removeItem: vi.fn() };
     expect(restoreV3Checkpoint(storage, now)).toBeNull();

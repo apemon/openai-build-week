@@ -3,12 +3,14 @@
 export interface StartScreenProps {
   liveEnabled: boolean;
   liveUnavailableReason?: string;
+  linkedSessionNotice?: string | null;
+  brainLabel?: string;
   onEnableMicrophone: () => void | Promise<void>;
   onStartLiveText: () => void;
   onStartPreparedDemo: () => void;
 }
 
-export function StartScreen({ liveEnabled, liveUnavailableReason, onEnableMicrophone, onStartLiveText, onStartPreparedDemo }: StartScreenProps) {
+export function StartScreen({ liveEnabled, liveUnavailableReason, linkedSessionNotice, brainLabel = "Live AI", onEnableMicrophone, onStartLiveText, onStartPreparedDemo }: StartScreenProps) {
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl items-center px-5 py-12 sm:px-8">
       <div className="w-full">
@@ -20,14 +22,15 @@ export function StartScreen({ liveEnabled, liveUnavailableReason, onEnableMicrop
           <section aria-labelledby="live-title" className="rounded-3xl border border-stone-700 bg-stone-900/80 p-6 sm:p-8">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 id="live-title" className="text-2xl font-semibold">Live interview</h2>
-              <span className="rounded-full border border-sky-600 px-3 py-1 text-sm text-sky-200">Live AI</span>
+              <span className="rounded-full border border-sky-600 px-3 py-1 text-sm text-sky-200">{brainLabel}</span>
             </div>
             <p className="mt-4 text-stone-300">Speak or type your real product intent. You review every Answer Draft before it reaches the Brain.</p>
             <div className="mt-5 rounded-2xl bg-stone-950 p-4 text-sm leading-6 text-stone-300">
-              <p>Spec Grill does not persist raw audio or session text on its servers. Live audio and text are processed by OpenAI under the deployed project&apos;s data controls.</p>
+              <p>Spec Grill does not retain raw audio. Confirmed Brain inputs and validated outputs may persist in the local hackathon Codex session until its local session store is cleared.</p>
               <p className="mt-2 font-medium text-amber-200">Do not enter confidential or regulated information in this hackathon demo.</p>
             </div>
             {!liveEnabled && <p role="status" className="mt-4 rounded-xl border border-amber-700 bg-amber-950/40 p-3 text-sm text-amber-100">Live Mode is unavailable. {liveUnavailableReason ?? "Server configuration is disabled."}</p>}
+            {linkedSessionNotice && <p role="alert" className="mt-4 rounded-xl border border-amber-700 bg-amber-950/40 p-3 text-sm text-amber-100">{linkedSessionNotice}</p>}
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button type="button" disabled={!liveEnabled} onClick={onEnableMicrophone} className="min-h-11 rounded-xl bg-sky-300 px-5 py-3 font-semibold text-stone-950 disabled:cursor-not-allowed disabled:bg-stone-700 disabled:text-stone-400">Enable microphone</button>
               <button type="button" disabled={!liveEnabled} onClick={onStartLiveText} className="min-h-11 rounded-xl border border-stone-600 px-5 py-3 font-semibold text-stone-100 disabled:cursor-not-allowed disabled:text-stone-500">Continue with text only</button>

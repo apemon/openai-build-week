@@ -61,6 +61,7 @@ export interface RestoredV3Checkpoint {
   state: SessionState;
   confirmedQueuedEntries: RestoredAsyncEntry[];
   adaptiveWindow: AdaptiveWindowState;
+  codexThreadId: string | null;
   migratedFromV2: boolean;
 }
 
@@ -69,6 +70,7 @@ export function createV3Checkpoint(
   confirmedQueuedEntries: RestoredAsyncEntry[],
   adaptiveWindow: AdaptiveWindowState,
   now = new Date(),
+  codexThreadId: string | null = null,
 ): V3Checkpoint {
   const safeV2State = createCheckpoint(state, now).state;
   return v3CheckpointSchema.parse({
@@ -77,6 +79,7 @@ export function createV3Checkpoint(
     state: safeV2State,
     confirmedQueuedEntries,
     adaptiveWindow,
+    codexThreadId,
   });
 }
 
@@ -86,8 +89,15 @@ export function saveV3Checkpoint(
   confirmedQueuedEntries: RestoredAsyncEntry[],
   adaptiveWindow: AdaptiveWindowState,
   now = new Date(),
+  codexThreadId: string | null = null,
 ): void {
-  storage.setItem(CHECKPOINT_KEY, JSON.stringify(createV3Checkpoint(state, confirmedQueuedEntries, adaptiveWindow, now)));
+  storage.setItem(CHECKPOINT_KEY, JSON.stringify(createV3Checkpoint(
+    state,
+    confirmedQueuedEntries,
+    adaptiveWindow,
+    now,
+    codexThreadId,
+  )));
 }
 
 export function restoreV3Checkpoint(
@@ -108,6 +118,7 @@ export function restoreV3Checkpoint(
         state: sessionStateSchema.parse(parsedV3.data.state),
         confirmedQueuedEntries: parsedV3.data.confirmedQueuedEntries,
         adaptiveWindow: parsedV3.data.adaptiveWindow,
+        codexThreadId: parsedV3.data.codexThreadId ?? null,
         migratedFromV2: false,
       };
     }
@@ -120,6 +131,7 @@ export function restoreV3Checkpoint(
       state: sessionStateSchema.parse(parsedV2.data.state),
       confirmedQueuedEntries: [],
       adaptiveWindow: { eligibleOutcomes: [], applicationCap: 1, singletonRecoveryStreak: 0 },
+      codexThreadId: null,
       migratedFromV2: true,
     };
   } catch {
