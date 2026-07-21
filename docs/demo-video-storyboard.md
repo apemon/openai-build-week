@@ -54,7 +54,7 @@ Target length: 3:00. Capture at 1280×720 or larger in current desktop Chrome us
 
 **Picture:** Passing lint, typecheck, unit/integration, Playwright, and build output; finish on Prepared Final Review.
 
-**Narration:** “Codex implemented V3 across frozen contracts, Brain streaming, Realtime identity safety, the accessible Prepared experience, and independent verification. Automated checks use mocks, fake media, and 24 synthetic evaluation fixtures. Live OpenAI, physical microphone, deployment streaming duration, and provider retention remain separately unverified.”
+**Narration:** “Codex implemented V3 across frozen contracts, Brain streaming, Realtime identity safety, the accessible Prepared experience, and independent verification. Automated checks use mocks, fake media, and 24 synthetic evaluation fixtures. A local opt-in GPT-5.6 NDJSON smoke and Realtime session issuance passed; physical microphone media, deployment streaming duration, and provider retention remain separately unverified.”
 
 ## Capture checklist
 

@@ -17,8 +17,8 @@ Automated tests use mocked provider boundaries, fake media, deterministic Prepar
 
 ## Live GPT-5.6 and streaming
 
-- [ ] Dedicated capped OpenAI project configured server-side; Live explicitly enabled.
-- [ ] Ordinary Live uses `one_shot`, requested/actual `gpt-5.6`, medium reasoning, Structured Outputs, `background: true`, and `store: false`.
+- [x] Dedicated capped OpenAI project configured server-side; Live explicitly enabled for the 2026-07-21 local smoke.
+- [x] Ordinary Live used `one_shot`, requested `gpt-5.6`, actual `gpt-5.6-sol`, medium reasoning, Structured Outputs, `background: true`, and `store: false` in the 2026-07-21 local smoke.
 - [ ] No input reaches `/api/brain` before the required Product Manager confirmation.
 - [ ] Persistent status appears immediately and each visible stage maps to a validated lifecycle event.
 - [ ] A representative action stays connected beyond 30 seconds and shows `Taking longer than usual` without timer reset across repair.
@@ -48,7 +48,7 @@ Automated tests use mocked provider boundaries, fake media, deterministic Prepar
 ## Current delivery status
 
 - Automated mocks/fixtures: verified by the repository test commands.
-- Live OpenAI: not verified in this delivery.
+- Live OpenAI Brain: one local confirmed-snapshot NDJSON smoke passed on 2026-07-21 (revision 1, one bounded repair, 30 lifecycle events); Realtime session issuance returned 200 with the secret-bearing body discarded.
 - Physical microphone/playback: not verified in this delivery.
 - Deployment and target-host stream duration: not verified in this delivery.
 - Provider retention/ZDR: not verified in this delivery.

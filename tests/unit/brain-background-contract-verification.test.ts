@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { zodTextFormat } from "openai/helpers/zod";
 
 import {
   BRAIN_POLL_INTERVAL_MS,
@@ -10,6 +11,7 @@ import {
   MAX_BRAIN_TIMEOUT_MS,
   MIN_BRAIN_TIMEOUT_MS,
 } from "@/agents/brain/runtime-config";
+import { externalEvidenceSchema, v3BrainModelOutputSchema } from "@/domain/v3-schemas";
 
 describe("background Brain contract verification", () => {
   it("keeps the five-minute per-attempt default, bounded override, polling interval, and explicit route duration visible", () => {
@@ -38,11 +40,31 @@ describe("background Brain contract verification", () => {
     expect(runner).toMatch(/bestEffortCancel\(responses,\s*id\)/);
   });
 
-  it("documents temporary background retention without claiming live verification", () => {
+  it("documents temporary background retention and the bounded local live verification", () => {
     const readme = readFileSync("README.md", "utf8");
     expect(readme).toContain("https://developers.openai.com/api/docs/guides/background");
     expect(readme).toMatch(/temporarily stored[\s\S]{0,100}roughly ten minutes/);
     expect(readme).toContain("Automated verification uses mocked provider boundaries");
-    expect(readme).toContain("live GPT-5.6, physical microphone, deployment, and provider-retention verification are not claimed");
+    expect(readme).toContain("opt-in local smoke validated a live requested `gpt-5.6`");
+    expect(readme).toContain("Physical microphone/WebRTC media behavior, deployment, and provider-retention verification are not claimed");
+  });
+
+  it("keeps HTTPS evidence validation without emitting an unsupported uri format", () => {
+    const providerSchema = zodTextFormat(v3BrainModelOutputSchema, "v3_brain_model_output");
+    expect(JSON.stringify(providerSchema)).not.toContain('"format":"uri"');
+    expect(externalEvidenceSchema.safeParse({
+      id: "EVID-001",
+      title: "Public reference",
+      url: "https://example.com/reference",
+      retrievedAt: "2026-07-21T00:00:00.000Z",
+      informedTargets: [{ kind: "specification_item", itemId: "PROB-001" }],
+    }).success).toBe(true);
+    expect(externalEvidenceSchema.safeParse({
+      id: "EVID-001",
+      title: "Insecure reference",
+      url: "http://example.com/reference",
+      retrievedAt: "2026-07-21T00:00:00.000Z",
+      informedTargets: [{ kind: "specification_item", itemId: "PROB-001" }],
+    }).success).toBe(false);
   });
 });

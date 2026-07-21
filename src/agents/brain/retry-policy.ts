@@ -37,6 +37,8 @@ export function mapProviderError(error: unknown): BrainRunError {
     name?: unknown;
     status?: unknown;
     code?: unknown;
+    param?: unknown;
+    type?: unknown;
     cause?: unknown;
   };
 
@@ -69,6 +71,43 @@ export function mapProviderError(error: unknown): BrainRunError {
   }
   if (candidate?.status === 429 || candidate?.code === "rate_limit_exceeded") {
     return new BrainRunError("RATE_LIMITED", "The Brain is temporarily rate limited.", true, { cause: error });
+  }
+  if (candidate?.status === 401 || candidate?.status === 403) {
+    return new BrainRunError(
+      "INTERNAL_ERROR",
+      "The OpenAI project is not authorized for this Brain request.",
+      false,
+      { cause: error },
+    );
+  }
+  if (candidate?.status === 404) {
+    return new BrainRunError(
+      "INVALID_REQUEST",
+      "The configured Brain model is unavailable to this OpenAI project.",
+      false,
+      { cause: error },
+    );
+  }
+  if (candidate?.status === 400) {
+    const parameter = typeof candidate.param === "string" ? candidate.param : "";
+    const providerCode = typeof candidate.code === "string" ? candidate.code : "";
+    const safeReason = parameter === "model" || providerCode === "model_not_found"
+      ? "The configured Brain model is unavailable to this OpenAI project."
+      : parameter === "background"
+        ? "The configured Brain model does not accept background execution."
+        : parameter === "store"
+          ? "The provider rejected the required store:false privacy setting."
+          : parameter.startsWith("text.format") || providerCode === "invalid_json_schema"
+            ? "The provider rejected the Brain Structured Output schema."
+            : parameter === "reasoning.effort" || parameter === "reasoning"
+              ? "The configured Brain model does not accept medium reasoning effort."
+              : "The provider rejected the configured Brain request.";
+    return new BrainRunError(
+      "INVALID_REQUEST",
+      safeReason,
+      false,
+      { cause: error },
+    );
   }
   return new BrainRunError("INTERNAL_ERROR", "The Brain provider request failed.", true, { cause: error });
 }

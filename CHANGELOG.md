@@ -11,8 +11,9 @@
 - Added 24 synthetic evaluation fixtures, frozen rubrics/gates, gitignored artifact output, and secret/content sentinels. No live bake-off, human scoring, or adapter promotion was performed.
 - Extended Prepared Demo with a two-permit user-paced fixture clock, two sequential individual confirmations, revision-first revalidation, one dependency-invalidated Not Applied outcome, one automatic one-entry batch, and no OpenAI/Codex/search/microphone/user-file/API dependency.
 - Added independent NDJSON privacy, batch atomicity, checkpoint/reload, 390 px, axe, Prepared isolation, and V1/V2 regression verification.
+- Updated the opt-in live smoke utility for the V3 NDJSON contract and removed the provider-unsupported `uri` schema keyword while retaining strict runtime HTTPS validation. A local live smoke validated requested `gpt-5.6` / actual `gpt-5.6-sol`, revision 1, one bounded repair, and 30 lifecycle events; the Realtime session endpoint also returned 200 with its secret-bearing body discarded.
 
-Live OpenAI, physical microphone, deployment/target-host streaming duration, provider retention, and public-search behavior remain manually unverified.
+Physical microphone/WebRTC media behavior, deployment/target-host streaming duration, provider retention, and public-search behavior remain manually unverified.
 
 ## V2 delivered extension
 

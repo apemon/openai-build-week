@@ -20,6 +20,15 @@ const isoDate = z.string().datetime({ offset: true });
 const shortText = z.string().trim().min(1).max(500);
 const longText = z.string().trim().min(1).max(4_000);
 const dependencyVersion = entityId;
+const httpsUrl = z.string().trim().min(1).max(2_048)
+  .regex(/^https:\/\/[^\s]+$/, "External evidence URLs must use HTTPS")
+  .refine((value) => {
+    try {
+      return new URL(value).protocol === "https:";
+    } catch {
+      return false;
+    }
+  }, "External evidence URLs must be valid HTTPS URLs");
 
 export const v3BrainOperationSchema = z.enum([
   "initialize",
@@ -43,7 +52,7 @@ export const externalEvidenceSchema = z
   .object({
     id: evidenceId,
     title: z.string().trim().min(1).max(300),
-    url: z.string().url().max(2_048).refine((value) => value.startsWith("https://"), "External evidence URLs must use HTTPS"),
+    url: httpsUrl,
     retrievedAt: isoDate,
     informedTargets: z.array(externalEvidenceTargetSchema).min(1).max(20),
   })
@@ -53,7 +62,7 @@ export const frozenExternalEvidenceSchema = z
   .object({
     id: evidenceId,
     title: z.string().trim().min(1).max(300),
-    url: z.string().url().max(2_048).refine((value) => value.startsWith("https://"), "Frozen evidence URLs must use HTTPS"),
+    url: httpsUrl,
     retrievedAt: isoDate,
     factualAbstract: z.string().trim().min(1).max(2_000),
     contentHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),

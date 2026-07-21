@@ -156,7 +156,7 @@ The implementation was built as four bounded Codex workstreams coordinated by a 
 - **Experience/demo:** Persistent Brain Status, Decision Tray, one-active-question presentation, External Evidence rendering/export, two-permit Prepared fixtures, Visual Aids, local audio, Final Review, and browser-generated Markdown.
 - **Verification/docs:** independent NDJSON privacy, batch atomicity, checkpoint/reload, harness-default, axe/390 px, Prepared isolation, V1/V2 regression, and browser verification plus this documentation.
 
-The contribution record describes repository work, not runtime model output. Prepared Demo snapshots are fixtures. Automated verification uses mocked provider boundaries; live GPT-5.6, physical microphone, deployment, and provider-retention verification are not claimed here.
+The contribution record describes repository work, not Prepared fixture output. Automated verification uses mocked provider boundaries. On 2026-07-21, the opt-in local smoke validated a live requested `gpt-5.6` / actual `gpt-5.6-sol` revision through the V3 NDJSON route, and the live Realtime session endpoint returned 200 while its secret-bearing body was discarded. Physical microphone/WebRTC media behavior, deployment, and provider-retention verification are not claimed here.
 
 ## MVP limits
 
