@@ -135,4 +135,15 @@ describe("V3 Brain semantic validation", () => {
     expect(validation.valid).toBe(false);
     expect(validation.errors.some((error) => error.includes("unknown External Evidence EVID-999"))).toBe(true);
   });
+
+  it("gives content-free RegExp and prefix guidance for category-mismatched item IDs", () => {
+    const output = structuredClone(validV3BrainOutput());
+    output.specification.problemStatement[0].id = "FR-999";
+    const validation = validateV3BrainOutput(validV3BrainRequest(), output);
+
+    expect(validation.errors).toContain(
+      "problemStatement item ID must match /^PROB-[0-9]{3,}$/ (required prefix PROB-) for category problem",
+    );
+    expect(validation.errors.some((error) => error.startsWith("FR-999: ID"))).toBe(false);
+  });
 });

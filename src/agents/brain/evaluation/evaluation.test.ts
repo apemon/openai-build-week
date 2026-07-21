@@ -1,7 +1,15 @@
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { validateV3BrainRequest } from "../v3-semantic-validator";
-import { buildCodexEvaluationResponse, CodexEphemeralBrainHarness } from "./codex-ephemeral";
+import {
+  buildCodexEvaluationResponse,
+  buildCodexOutputSchema,
+  CodexEphemeralBrainHarness,
+} from "./codex-ephemeral";
 import { buildEvaluationRequest, syntheticEvaluationSessions } from "./dataset";
 import { evaluatePromotionGate, nearestRankP95, type CandidateGateMetrics } from "./gates";
 import { scoreTechnicalOutput } from "./technical-scorer";
@@ -36,7 +44,51 @@ function metrics(candidate: CandidateGateMetrics["candidate"]): CandidateGateMet
   };
 }
 
+async function createMockCodex(outputs: unknown[]): Promise<{ executable: string; root: string }> {
+  const root = await mkdtemp(join(tmpdir(), "spec-grill-codex-mock-"));
+  const executable = join(root, "mock-codex.cjs");
+  await writeFile(join(root, "outputs.json"), JSON.stringify(outputs), { mode: 0o600 });
+  await writeFile(executable, `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const root = path.dirname(process.argv[1]);
+const countPath = path.join(root, "count.txt");
+const count = fs.existsSync(countPath) ? Number(fs.readFileSync(countPath, "utf8")) : 0;
+const args = process.argv.slice(2);
+const outputPath = args[args.indexOf("--output-last-message") + 1];
+let prompt = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => { prompt += chunk; });
+process.stdin.on("end", () => {
+  const next = count + 1;
+  fs.writeFileSync(countPath, String(next));
+  fs.writeFileSync(path.join(root, "prompt-" + next + ".txt"), prompt, { mode: 0o600 });
+  const outputs = JSON.parse(fs.readFileSync(path.join(root, "outputs.json"), "utf8"));
+  fs.writeFileSync(outputPath, JSON.stringify(outputs[count]), { mode: 0o600 });
+});
+`, { mode: 0o700 });
+  await chmod(executable, 0o700);
+  return { executable, root };
+}
+
 describe("frozen Brain evaluation", () => {
+  it("emits a Codex-compatible output schema without unsupported oneOf keywords", () => {
+    const schema = buildCodexOutputSchema();
+    const pending: unknown[] = [schema];
+
+    while (pending.length > 0) {
+      const value = pending.pop();
+      if (Array.isArray(value)) {
+        pending.push(...value);
+      } else if (value !== null && typeof value === "object") {
+        expect(Object.hasOwn(value, "oneOf")).toBe(false);
+        pending.push(...Object.values(value));
+      }
+    }
+
+    expect(schema).toMatchObject({ type: "object" });
+  });
+
   it("contains at least 24 validated synthetic, category-diverse sessions", () => {
     expect(syntheticEvaluationSessions).toHaveLength(24);
     expect(new Set(syntheticEvaluationSessions.map((session) => session.category)).size).toBeGreaterThanOrEqual(10);
@@ -65,6 +117,79 @@ describe("frozen Brain evaluation", () => {
     });
     const iterate = harness.run(buildEvaluationRequest(syntheticEvaluationSessions[0]), new AbortController().signal);
     await expect(iterate[Symbol.asyncIterator]().next()).rejects.toThrow(/cannot be enforced/);
+  });
+
+  it("repairs one semantically invalid Codex output with a bounded second attempt", async () => {
+    const invalid = structuredClone(validV3BrainOutput());
+    invalid.interviewWindow.applicationCap = 1;
+    const { executable, root: testRoot } = await createMockCodex([invalid, validV3BrainOutput()]);
+
+    try {
+      const harness = new CodexEphemeralBrainHarness({
+        apiKey: "local-test-key",
+        executable,
+        timeoutMs: 10_000,
+        now: () => new Date("2026-07-21T00:00:00.000Z"),
+      });
+      const events = [];
+      for await (const event of harness.run(validV3BrainRequest(), new AbortController().signal)) {
+        events.push(event);
+      }
+
+      expect(events.filter((event) => event.type === "lifecycle").map(({ event }) => ({
+        kind: event.kind,
+        attempt: event.attempt,
+        sequence: event.sequence,
+      }))).toEqual([
+        { kind: "request_accepted", attempt: 1, sequence: 0 },
+        { kind: "provider_attempt_terminal", attempt: 1, sequence: 1 },
+        { kind: "validating_output", attempt: 1, sequence: 2 },
+        { kind: "repair_started", attempt: 2, sequence: 3 },
+        { kind: "provider_attempt_terminal", attempt: 2, sequence: 4 },
+        { kind: "validating_output", attempt: 2, sequence: 5 },
+      ]);
+      expect(events.find((event) => event.type === "result")?.response.provenance.repairAttempted).toBe(true);
+      expect(await readFile(join(testRoot, "count.txt"), "utf8")).toBe("2");
+      const repairPrompt = await readFile(join(testRoot, "prompt-2.txt"), "utf8");
+      expect(repairPrompt).toContain("Repair the rejected candidate.");
+      expect(repairPrompt).toContain("Correct every bounded validation failure literally");
+    } finally {
+      await rm(testRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("sanitizes the terminal error when the bounded repair is still invalid", async () => {
+    const invalid = structuredClone(validV3BrainOutput());
+    invalid.interviewWindow.applicationCap = 1;
+    const { executable, root: testRoot } = await createMockCodex([invalid, invalid]);
+
+    try {
+      const harness = new CodexEphemeralBrainHarness({
+        apiKey: "local-test-key",
+        executable,
+        timeoutMs: 10_000,
+      });
+      let terminalError: unknown;
+      try {
+        for await (const event of harness.run(validV3BrainRequest(), new AbortController().signal)) {
+          void event;
+        }
+      } catch (error) {
+        terminalError = error;
+      }
+
+      expect(terminalError).toMatchObject({
+        code: "INVALID_MODEL_OUTPUT",
+        message: "Codex returned invalid output after the bounded repair.",
+        retryable: false,
+      });
+      expect(Object.hasOwn(terminalError as object, "rejectedOutput")).toBe(false);
+      expect(Object.hasOwn(terminalError as object, "validationErrors")).toBe(false);
+      expect(JSON.stringify(terminalError)).not.toContain("applicationCap");
+      expect(await readFile(join(testRoot, "count.txt"), "utf8")).toBe("2");
+    } finally {
+      await rm(testRoot, { recursive: true, force: true });
+    }
   });
 
   it("scores malformed candidate output as a deterministic technical failure", () => {

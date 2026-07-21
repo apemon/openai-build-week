@@ -85,6 +85,12 @@ export function buildV3RepairInput(
 ): string {
   return `Repair the rejected candidate. Return one complete output and no explanation.
 
+Mandatory repair rules:
+- Correct every bounded validation failure literally; do not return any failed field unchanged.
+- For an ID/category failure, replace the rejected ID everywhere with one unique ID matching the exact required RegExp and prefix, or remove the rejected item and every reference to it. Never reuse a rejected ID.
+- For an unsupported derived constraint, remove the unsupported constraint wording and any equivalent unsupported modal, number, or policy claim unless the authoritative input states it exactly.
+- Revalidate all cross-references after corrections; omission of a listed correction is another invalid output.
+
 Bounded deterministic validation failures:
 ${json(validationErrors.slice(0, 12).map((error) => error.replace(/\s+/g, " ").slice(0, 240)))}
 

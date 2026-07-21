@@ -44,7 +44,7 @@ describe("Brain semantic validation", () => {
     const result = validateBrainOutput(request, output);
 
     expect(result.valid).toBe(false);
-    expect(result.errors.join("\n")).toMatch(/ID does not match category/);
+    expect(result.errors.join("\n")).toMatch(/required prefix PROB-.*category problem/);
     expect(result.errors.join("\n")).toMatch(/unknown source turn/);
     expect(result.errors.join("\n")).toMatch(/exactly one question/);
   });

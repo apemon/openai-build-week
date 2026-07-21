@@ -30,17 +30,18 @@ const itemSections: Array<{
   key: ItemSection;
   kind: SpecificationItem["kind"];
   idPattern: RegExp;
+  idPrefix: string;
 }> = [
-  { key: "problemStatement", kind: "problem", idPattern: /^PROB-[0-9]{3,}$/ },
-  { key: "users", kind: "user", idPattern: /^USER-[0-9]{3,}$/ },
-  { key: "jobsToBeDone", kind: "job", idPattern: /^JOB-[0-9]{3,}$/ },
-  { key: "functionalRequirements", kind: "functional_requirement", idPattern: /^FR-[0-9]{3,}$/ },
-  { key: "nonFunctionalRequirements", kind: "non_functional_requirement", idPattern: /^NFR-[0-9]{3,}$/ },
-  { key: "assumptions", kind: "assumption", idPattern: /^ASM-[0-9]{3,}$/ },
-  { key: "risks", kind: "risk", idPattern: /^RISK-[0-9]{3,}$/ },
-  { key: "edgeCases", kind: "edge_case", idPattern: /^EDGE-[0-9]{3,}$/ },
-  { key: "openQuestions", kind: "open_question", idPattern: /^OQ-[0-9]{3,}$/ },
-  { key: "blockers", kind: "blocker", idPattern: /^BLK-[0-9]{3,}$/ },
+  { key: "problemStatement", kind: "problem", idPattern: /^PROB-[0-9]{3,}$/, idPrefix: "PROB-" },
+  { key: "users", kind: "user", idPattern: /^USER-[0-9]{3,}$/, idPrefix: "USER-" },
+  { key: "jobsToBeDone", kind: "job", idPattern: /^JOB-[0-9]{3,}$/, idPrefix: "JOB-" },
+  { key: "functionalRequirements", kind: "functional_requirement", idPattern: /^FR-[0-9]{3,}$/, idPrefix: "FR-" },
+  { key: "nonFunctionalRequirements", kind: "non_functional_requirement", idPattern: /^NFR-[0-9]{3,}$/, idPrefix: "NFR-" },
+  { key: "assumptions", kind: "assumption", idPattern: /^ASM-[0-9]{3,}$/, idPrefix: "ASM-" },
+  { key: "risks", kind: "risk", idPattern: /^RISK-[0-9]{3,}$/, idPrefix: "RISK-" },
+  { key: "edgeCases", kind: "edge_case", idPattern: /^EDGE-[0-9]{3,}$/, idPrefix: "EDGE-" },
+  { key: "openQuestions", kind: "open_question", idPattern: /^OQ-[0-9]{3,}$/, idPrefix: "OQ-" },
+  { key: "blockers", kind: "blocker", idPattern: /^BLK-[0-9]{3,}$/, idPrefix: "BLK-" },
 ];
 
 const demoMarker = /\b(?:prepared[ _-]?demo|demo[ _-]?mode|prepared[ _-]?scenario|no ai call)\b/i;
@@ -560,10 +561,12 @@ export function validateBrainOutput(
     ...[...outputItems.values()].filter((item) => item.status === "confirmed").map((item) => item.statement),
   ];
 
-  for (const { key, kind, idPattern } of itemSections) {
+  for (const { key, kind, idPattern, idPrefix } of itemSections) {
     for (const item of output.specification[key]) {
       if (item.kind !== kind) errors.push(`${item.id}: kind does not match ${key}`);
-      if (!idPattern.test(item.id)) errors.push(`${item.id}: ID does not match category ${kind}`);
+      if (!idPattern.test(item.id)) {
+        errors.push(`${key} item ID must match ${idPattern} (required prefix ${idPrefix}) for category ${kind}`);
+      }
       if (allIds.has(item.id)) errors.push(`${item.id}: duplicate ID`);
       allIds.add(item.id);
       if (item.sourceTurnIds.length === 0) errors.push(`${item.id}: sourceTurnIds must not be empty`);
